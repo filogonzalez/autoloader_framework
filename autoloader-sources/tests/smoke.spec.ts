@@ -2,42 +2,9 @@ import { test, expect } from '@playwright/test';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-// ── Templated configuration (resolved by `databricks apps init`) ────────────
-const APP_CONFIG = {
-  name: 'autoloader-sources',
-  plugins: [
-    'analytics',
-    'lakebase',
-  ],
-} as const;
-
-interface PluginPage {
-  navLabel: string;
-  path: string;
-  expectedTexts: string[];
-}
-
-const PLUGIN_PAGES: Record<string, PluginPage> = {
-  analytics: {
-    navLabel: 'Analytics',
-    path: '/analytics',
-    expectedTexts: ['SQL Query Result', 'Sales Data Filter'],
-  },
-  lakebase: {
-    navLabel: 'Lakebase',
-    path: '/lakebase',
-    expectedTexts: ['Todo List'],
-  },
-  genie: {
-    navLabel: 'Genie',
-    path: '/genie',
-    expectedTexts: ['Ask questions about your data using Databricks AI/BI Genie'],
-  },
-};
-
-const enabledPages = Object.entries(PLUGIN_PAGES).filter(
-  ([key]) => APP_CONFIG.plugins.includes(key),
-);
+// ── App shape (must match client/src/App.tsx) ───────────────────────────────
+// Header: 'Autoloader Sources'. Nav: 'Sources' (/) and 'Tables & Lineage' (/lineage).
+const APP_HEADER = 'Autoloader Sources';
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
@@ -47,30 +14,32 @@ let consoleErrors: string[] = [];
 let pageErrors: string[] = [];
 let failedRequests: string[] = [];
 
-test('smoke test - app loads and displays home page', async ({ page }) => {
+test('smoke test - app shell and nav render', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: APP_CONFIG.name })).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Welcome to your Databricks App' }),
-  ).toBeVisible();
-  await expect(page.getByText('Getting Started')).toBeVisible();
+  // Header (App.tsx: <h1>Autoloader Sources</h1>)
+  await expect(page.getByRole('heading', { name: APP_HEADER, level: 1 })).toBeVisible();
 
-  await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
-  for (const [, plugin] of enabledPages) {
-    await expect(page.getByRole('link', { name: plugin.navLabel })).toBeVisible();
-  }
+  // Nav has exactly the two expected links (App.tsx NavLinks)
+  await expect(page.getByRole('link', { name: 'Sources' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Tables & Lineage' })).toBeVisible();
 });
 
-for (const [name, plugin] of enabledPages) {
-  test(`smoke test - ${name} page loads`, async ({ page }) => {
-    await page.goto(plugin.path);
+test('smoke test - / renders the Sources page', async ({ page }) => {
+  await page.goto('/');
 
-    for (const text of plugin.expectedTexts) {
-      await expect(page.getByText(text)).toBeVisible();
-    }
-  });
-}
+  // SourcesPage.tsx: <h2>Ingestion sources</h2>
+  await expect(page.getByRole('heading', { name: 'Ingestion sources' })).toBeVisible();
+  // SourcesPage.tsx: <Button onClick={openAdd}>… Add data source</Button>
+  await expect(page.getByRole('button', { name: 'Add data source' })).toBeVisible();
+});
+
+test('smoke test - /lineage renders the Lineage page', async ({ page }) => {
+  await page.goto('/lineage');
+
+  // LineagePage.tsx: <h2>Tables &amp; Lineage</h2>
+  await expect(page.getByRole('heading', { name: 'Tables & Lineage' })).toBeVisible();
+});
 
 // ── Lifecycle hooks ─────────────────────────────────────────────────────────
 
