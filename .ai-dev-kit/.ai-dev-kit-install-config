@@ -1,0 +1,10 @@
+# AI Dev Kit installation configuration
+# Generated on 2026-06-14 17:58:30 UTC
+CONFIG_SCHEMA_HASH="80c492fd"
+SAVED_TOOLS="claude cursor copilot"
+SAVED_PROFILE="fe_vending_machine"
+SAVED_SCOPE="project"
+SAVED_SKILLS_PROFILE="all"
+SAVED_USER_SKILLS=""
+SAVED_INSTALL_MCP="false"
+SAVED_MCP_INSTALL_PATH="/Users/filo.gzz/.ai-dev-kit"

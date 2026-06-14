@@ -1,0 +1,15 @@
+# Databricks Asset Bundle for the metadata-driven Auto Loader ingestion framework.
+# See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
+
+bundle:
+  name: autoloader_framework
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://adb-7405612437610096.16.azuredatabricks.net/

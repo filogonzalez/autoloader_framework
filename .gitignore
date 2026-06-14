@@ -1,0 +1,29 @@
+# --- Harness artifacts (local scaffolding; commit_artifacts=false, gitignore_artifacts=true) ---
+.harness/
+# progress.md and local rules live under .harness/, covered above. If you relocate them, keep them ignored:
+progress.md
+
+# --- Secrets (never commit) ---
+.env
+*.env
+*.key
+*.pem
+secrets.json
+.databrickscfg
+
+# --- Databricks / DABs ---
+.databricks/
+__pycache__/
+*.pyc
+
+# --- Python / venv ---
+.venv/
+.python-version
+
+# --- Editor / OS ---
+.DS_Store
+.vscode/*.log
+
+# Agent instructions — kept LOCAL per user choice (all_local). Remove these two lines to share.
+AGENTS.md
+CLAUDE.md
