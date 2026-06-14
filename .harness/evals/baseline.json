@@ -1,0 +1,39 @@
+{
+  "results": [
+    {
+      "id": "bundle_validates",
+      "kind": "command",
+      "status": "pass",
+      "detail": "exit=0 expect_found=True"
+    },
+    {
+      "id": "framework_is_generic",
+      "kind": "command",
+      "status": "pass",
+      "detail": "exit=0 expect_found=True"
+    },
+    {
+      "id": "audit_logging_present",
+      "kind": "command",
+      "status": "pass",
+      "detail": "exit=0"
+    },
+    {
+      "id": "onboard_source",
+      "kind": "rubric",
+      "status": "pending",
+      "detail": "no verifier verdict yet (run verify.sh + verifier pass)"
+    },
+    {
+      "id": "cast_all_as_string_drift",
+      "kind": "rubric",
+      "status": "pending",
+      "detail": "no verifier verdict yet (run verify.sh + verifier pass)"
+    }
+  ],
+  "aggregate": {
+    "auto_pass": 3,
+    "auto_total": 3,
+    "auto_score": 1.0
+  }
+}

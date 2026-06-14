@@ -1,0 +1,16 @@
+2026-06-14T18:14:30Z	verify: gate start (target=dev)
+2026-06-14T18:14:31Z	verify: gate PASS
+2026-06-14T18:14:31Z	verify: packet written -> /Users/filo.gzz/Desktop/Filo/Projects/Scotia/autoloader_framework/.harness/state/verify_packet.md
+2026-06-14T18:15:38.300417Z	eval: run auto_score=0.667
+2026-06-14T18:16:20.149814Z	eval: run auto_score=1.0
+2026-06-14T18:16:20.780387Z	eval: baseline saved score=1.0
+2026-06-14T18:16:21.536107Z	eval: run auto_score=1.0
+2026-06-14T18:18:02Z	human-readable action log. Cross-cutting guardrail: every state-changing tool call appends here (tool, inputs summary, outcome).
+2026-06-14T18:18:02Z	harness bootstrap complete: phases 0-6 + guardrails written; gate=bundle validate (PASS); evals 3/3 auto + 2 rubric pending; git not initialized (hook staged).
+2026-06-14T18:19:14.369235Z	eval: run auto_score=1.0
+2026-06-14T18:40:48Z	deploy: created catalog autoloader_demo (managed location under classic external location) — owner filo.gzz; CREATE CATALOG IF NOT EXISTS now no-ops
+2026-06-14T18:41:46Z	deploy: bundle deploy -t dev (user-authorized)
+2026-06-14T18:42:32Z	run: bundle run autoloader_framework_demo -t dev (user-authorized)
+2026-06-14T19:05:18Z	run: redeploy+run after fixes (caseSensitive removed, explicit-schema evolution=none, rows from recentProgress, demo-state reset)
+2026-06-14T19:13:01Z	run: SUCCESS — all 6 operations ingested (pos=20,acme=4,crm=4,edi=2,click=3,loyalty=4); demo ready via single bundle run
+2026-06-14T21:30:04Z  CREATE Lakebase project projects/autoloader-meta (branch production, db databricks_postgres, endpoint primary host ep-icy-salad-e3rfd4g7.database.westus.azuredatabricks.net) by filo.gzz@databricks.com

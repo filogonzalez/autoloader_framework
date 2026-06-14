@@ -1,0 +1,17 @@
+{
+  "task_id": "example-onboard-returns-source",
+  "title": "Onboard a 'returns' JSON source via metadata INSERT",
+  "status": "in_progress",
+  "created_at": "2026-06-14T13:11:00Z",
+  "updated_at": "2026-06-14T13:11:00Z",
+  "rubric": ".harness/evals/tasks/onboard_source.rubric.md",
+  "steps": [
+    { "id": "s1", "desc": "Add source + target object rows to 02_seed_metadata.sql", "status": "done" },
+    { "id": "s2", "desc": "Add operation row binding source->target", "status": "done" },
+    { "id": "s3", "desc": "databricks bundle validate -t dev", "status": "pending" },
+    { "id": "s4", "desc": "Independent verifier pass against rubric", "status": "pending" }
+  ],
+  "next_action": "Run `databricks bundle validate -t dev`, then verify against the rubric.",
+  "artifacts_touched": ["src/sql/02_seed_metadata.sql"],
+  "notes": "Template only. Copy to state/<task-id>.json and update as you work."
+}

@@ -1,0 +1,51 @@
+# model.config.yaml — Phase 1: programmatic model backend resolution
+#
+# SCOPE: This configures ONLY *programmatic* model calls the harness makes
+# (the Phase 4 verifier, Phase 5 eval scoring). The agent's own INTERACTIVE
+# reasoning uses the IDE-provided model access (Cursor) and needs no key.
+#
+# Resolution order (first match wins), unless `backend_override` forces one:
+#   1. databricks-model-serving  — if DATABRICKS_MODEL_SERVING_ENDPOINT is set
+#      (billed via DBUs; the recommended enterprise path since no API key is
+#       extractable from the IDE in this workspace).
+#   2. anthropic-api             — if ANTHROPIC_API_KEY is set.
+#   3. ide                       — fall back to the IDE-provided path (Cursor).
+#      In Cursor, programmatic calls are NOT generally available, so verifier/
+#      eval scoring degrades to "manual fresh-pass" mode (see bin/verify.sh).
+
+# Honors CONFIG: model_backend = cursor-native, model_env_switch = true.
+# Flip backend with ONE env var, no code edits:  export HARNESS_MODEL_BACKEND=...
+backend_override_env: HARNESS_MODEL_BACKEND   # values: databricks-model-serving | anthropic-api | ide
+default_backend: ide                          # cursor-native interactive; programmatic degrades gracefully
+
+backends:
+  databricks-model-serving:
+    detect_env: DATABRICKS_MODEL_SERVING_ENDPOINT   # e.g. the "Integrate Coding Agents" endpoint
+    endpoint_env: DATABRICKS_MODEL_SERVING_ENDPOINT
+    auth: databricks-cli-oauth                       # reuse DATABRICKS_CONFIG_PROFILE / metadata service
+    profile_env: DATABRICKS_CONFIG_PROFILE
+    notes: >
+      Preferred for this workspace. No model API key exists in the environment; auth is OAuth +
+      metadata-service. Route programmatic calls here (billed via DBUs) rather than assuming a key
+      can be lifted from the IDE.
+
+  anthropic-api:
+    detect_env: ANTHROPIC_API_KEY
+    model: claude-opus-4-8
+    notes: Used only if a key is explicitly provided. Not set in this workspace today.
+
+  ide:
+    detect_env: null
+    notes: >
+      Cursor-native. Interactive reasoning only. For programmatic verification/eval, this backend
+      means "no automated model call available" -> run the verifier as a manual fresh pass seeded
+      with the rubric + diff (the Cursor pattern). See bin/verify.sh and PHASE 4 in README.
+
+# Reasoning / thinking budget defaults (advisory; the IDE controls interactive budget).
+reasoning_budget:
+  hard_task:
+    description: architecture changes, schema/metadata model edits, multi-file refactors, eval failures
+    thinking: high
+  cheap_task:
+    description: docs, comments, single-line fixes, config tweaks
+    thinking: low

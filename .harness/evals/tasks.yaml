@@ -1,0 +1,43 @@
+# tasks.yaml — golden task set (Phase 5)
+# Seeded from real workspace tasks for the metadata-driven Auto Loader framework.
+# Scorer kinds:
+#   command   — run `cmd`; pass if exit 0 (and `expect` substring present if given)
+#   exact     — run `cmd`; pass if stdout (trimmed) == `expect`
+#   rubric    — graded by the independent verifier against `rubric`; result read from
+#               evals/results/<id>.verdict (PASS/FAIL). Reported as "manual/pending" if absent.
+#
+# A scorer kind=command/exact runs automatically. kind=rubric needs a verifier pass.
+
+tasks:
+  - id: bundle_validates
+    kind: command
+    weight: 1
+    desc: "The DABs bundle validates against target dev (the gate)."
+    cmd: "databricks bundle validate -t dev"
+    expect: "Validation OK!"
+
+  - id: framework_is_generic
+    kind: command
+    weight: 1
+    desc: "Framework notebook stays source-agnostic: no per-operation_id hardcoded branches."
+    cmd: "bash .harness/evals/checks/framework_is_generic.sh"
+    expect: "PASS"
+
+  - id: audit_logging_present
+    kind: command
+    weight: 1
+    desc: "Every run writes to the ingestion_audit_log table."
+    cmd: "grep -q ingestion_audit_log src/notebooks/10_ingestion_framework.py"
+    expect: ""
+
+  - id: onboard_source
+    kind: rubric
+    weight: 1
+    desc: "Onboard a new source via metadata INSERT only (no new notebook)."
+    rubric: tasks/onboard_source.rubric.md
+
+  - id: cast_all_as_string_drift
+    kind: rubric
+    weight: 1
+    desc: "Loyalty-history scenario: numeric vs string customer_tier land together via cast_all_as_string."
+    rubric: tasks/cast_all_as_string.rubric.md

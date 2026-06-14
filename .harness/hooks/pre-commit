@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# pre-commit — blocks committing secrets and harness artifacts.
+# Install with: .harness/hooks/install.sh  (after `git init`).
+set -euo pipefail
+
+# Files that must never be committed (by name/extension).
+SECRET_PATTERNS='(^|/)(\.env$|.*\.env$|.*\.key$|.*\.pem$|secrets\.json$|\.databrickscfg$)'
+# When gitignore_artifacts=true, the harness dir itself must not be committed.
+ARTIFACT_PATTERNS='(^\.harness/|^progress\.md$)'
+
+staged="$(git diff --cached --name-only)"
+fail=0
+
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  if printf '%s\n' "$f" | grep -qiE "$SECRET_PATTERNS"; then
+    echo "BLOCKED (secret): $f" >&2; fail=1
+  fi
+  if printf '%s\n' "$f" | grep -qE "$ARTIFACT_PATTERNS"; then
+    echo "BLOCKED (harness artifact — local only): $f" >&2; fail=1
+  fi
+done <<< "$staged"
+
+# Heuristic content scan for obvious inline secrets in staged text.
+if [ -n "$staged" ]; then
+  if git diff --cached -U0 | grep -nE '(DATABRICKS_TOKEN|ANTHROPIC_API_KEY|OPENAI_API_KEY|-----BEGIN [A-Z ]*PRIVATE KEY-----|dapi[0-9a-f]{32})' >/dev/null 2>&1; then
+    echo "BLOCKED: possible inline secret in staged changes (token/key)." >&2; fail=1
+  fi
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo "" >&2
+  echo "Commit rejected by .harness pre-commit hook. Unstage the above, or override with --no-verify only if you are certain." >&2
+  exit 1
+fi
+exit 0
