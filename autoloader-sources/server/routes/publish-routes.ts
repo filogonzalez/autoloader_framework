@@ -75,13 +75,25 @@ function buildOverwrite(
 ): string {
   const colList = [...cols, 'created_at'].join(', ');
   if (rowValues.length === 0) {
-    // Empty overwrite: cast NULLs so the VALUES clause type-checks, then filter all out.
+    // No rows to publish: empty the Delta table outright. A zero-row INSERT OVERWRITE
+    // can't carry a VALUES clause, so TRUNCATE is the correct way to clear it.
     return `TRUNCATE TABLE ${table}`;
   }
   const valuesSql = rowValues
     .map((vals) => `(${vals.map(lit).join(', ')}, current_timestamp())`)
     .join(',\n');
   return `INSERT OVERWRITE ${table} (${colList})\nVALUES\n${valuesSql}`;
+}
+
+/** Read back the row count of a Delta table (post-publish assertion). */
+async function tableCount(table: string): Promise<number> {
+  const { rows } = await executeSql(`SELECT COUNT(*) FROM ${table}`);
+  const raw = rows[0]?.[0];
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    throw new Error(`Could not read row count for ${table} (got ${String(raw)})`);
+  }
+  return n;
 }
 
 function objectRowFromDb(r: Record<string, unknown>): Literal[] {
@@ -118,8 +130,32 @@ export function registerPublishRoutes(appkit: AppKit): void {
         const objectRows = objects.rows.map(objectRowFromDb);
         const operationRows = operations.rows.map(operationRowFromDb);
 
-        await executeSql(buildOverwrite(`${DELTA_META}.object`, OBJECT_COLS, objectRows));
-        await executeSql(buildOverwrite(`${DELTA_META}.operation`, OPERATION_COLS, operationRows));
+        const objectTable = `${DELTA_META}.object`;
+        const operationTable = `${DELTA_META}.operation`;
+
+        // The Databricks SQL Statement Execution API runs ONE statement per call and Delta
+        // has no cross-table transaction, so we cannot make both overwrites a single atomic
+        // unit. Instead: overwrite `object` first (operations FK-reference objects, so the
+        // referenced side must land first), then `operation`. After both apply, read back the
+        // row counts and assert they match what we intended to publish — this fails loudly if
+        // the second overwrite errored mid-way (leaving Delta half-updated) or if a silent
+        // column/DDL misalignment dropped rows.
+        await executeSql(buildOverwrite(objectTable, OBJECT_COLS, objectRows));
+        await executeSql(buildOverwrite(operationTable, OPERATION_COLS, operationRows));
+
+        const [objectCount, operationCount] = await Promise.all([
+          tableCount(objectTable),
+          tableCount(operationTable),
+        ]);
+
+        if (objectCount !== objectRows.length || operationCount !== operationRows.length) {
+          throw new Error(
+            `Publish read-back mismatch — Delta is inconsistent. ` +
+              `object: expected ${objectRows.length}, found ${objectCount}; ` +
+              `operation: expected ${operationRows.length}, found ${operationCount}. ` +
+              `The metadata tables may be half-updated; re-run publish.`,
+          );
+        }
 
         res.json({
           published_objects: objectRows.length,
