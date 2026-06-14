@@ -6,6 +6,7 @@ import {
   lit,
   type Literal,
 } from '../lib/rows';
+import { lakebaseQuery } from '../lib/retry';
 import type { AppKit } from '../lib/types';
 
 const META_SCHEMA = 'metadata';
@@ -80,7 +81,7 @@ function buildOverwrite(
     return `TRUNCATE TABLE ${table}`;
   }
   const valuesSql = rowValues
-    .map((vals) => `(${vals.map(lit).join(', ')}, current_timestamp())`)
+    .map((vals) => `(${vals.map((v) => lit(v, 'databricks')).join(', ')}, current_timestamp())`)
     .join(',\n');
   return `INSERT OVERWRITE ${table} (${colList})\nVALUES\n${valuesSql}`;
 }
@@ -120,10 +121,12 @@ export function registerPublishRoutes(appkit: AppKit): void {
     // Publish all Lakebase metadata into the Delta tables the framework reads.
     app.post('/api/publish', async (_req, res) => {
       try {
-        const objects = await appkit.lakebase.query(
+        const objects = await lakebaseQuery(
+          appkit,
           `SELECT ${OBJECT_COLS.join(', ')} FROM ${META_SCHEMA}.object ORDER BY object_id`,
         );
-        const operations = await appkit.lakebase.query(
+        const operations = await lakebaseQuery(
+          appkit,
           `SELECT ${OPERATION_COLS.join(', ')} FROM ${META_SCHEMA}.operation ORDER BY operation_id`,
         );
 
@@ -136,10 +139,12 @@ export function registerPublishRoutes(appkit: AppKit): void {
         // The Databricks SQL Statement Execution API runs ONE statement per call and Delta
         // has no cross-table transaction, so we cannot make both overwrites a single atomic
         // unit. Instead: overwrite `object` first (operations FK-reference objects, so the
-        // referenced side must land first), then `operation`. After both apply, read back the
-        // row counts and assert they match what we intended to publish — this fails loudly if
-        // the second overwrite errored mid-way (leaving Delta half-updated) or if a silent
-        // column/DDL misalignment dropped rows.
+        // referenced side must land first), then `operation`. A statement that errors (e.g.
+        // the second overwrite failing mid-way, leaving Delta half-updated) is already caught
+        // by executeSql throwing. The read-back count assertion below covers the cases a throw
+        // does NOT surface: a statement that "succeeds" but lands a different row count than we
+        // published — e.g. the empty-input TRUNCATE path (table cleared to 0) or a silent
+        // column/DDL misalignment that dropped rows.
         await executeSql(buildOverwrite(objectTable, OBJECT_COLS, objectRows));
         await executeSql(buildOverwrite(operationTable, OPERATION_COLS, operationRows));
 
