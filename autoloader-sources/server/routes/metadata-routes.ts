@@ -8,6 +8,7 @@ import {
   sourceObjectValues,
   targetObjectValues,
 } from '../lib/rows';
+import { lakebaseQuery } from '../lib/retry';
 import type { AppKit, Operation, SourceBundle, SourceObject, TargetObject } from '../lib/types';
 
 const SCHEMA = 'metadata';
@@ -60,7 +61,7 @@ const CREATE_OPERATION_SQL = `
 
 function upsertObjectSql(values: ReturnType<typeof sourceObjectValues>): string {
   const cols = OBJECT_COLS.join(', ');
-  const vals = values.map(lit).join(', ');
+  const vals = values.map((v) => lit(v)).join(', ');
   const updates = OBJECT_COLS.filter((c) => c !== 'object_id')
     .map((c) => `${c} = EXCLUDED.${c}`)
     .join(', ');
@@ -70,7 +71,7 @@ function upsertObjectSql(values: ReturnType<typeof sourceObjectValues>): string 
 
 function upsertOperationSql(op: Operation): string {
   const cols = OPERATION_COLS.join(', ');
-  const vals = operationValues(op).map(lit).join(', ');
+  const vals = operationValues(op).map((v) => lit(v)).join(', ');
   const updates = OPERATION_COLS.filter((c) => c !== 'operation_id')
     .map((c) => `${c} = EXCLUDED.${c}`)
     .join(', ');
@@ -91,15 +92,15 @@ function writeBundleSql(bundle: SourceBundle): string {
 
 /** Create the schema + tables and seed the six demo sources on first startup. */
 export async function setupMetadataSchema(appkit: AppKit): Promise<void> {
-  await appkit.lakebase.query(CREATE_SCHEMA_SQL);
-  await appkit.lakebase.query(CREATE_OBJECT_SQL);
-  await appkit.lakebase.query(CREATE_OPERATION_SQL);
+  await lakebaseQuery(appkit, CREATE_SCHEMA_SQL);
+  await lakebaseQuery(appkit, CREATE_OBJECT_SQL);
+  await lakebaseQuery(appkit, CREATE_OPERATION_SQL);
 
-  const { rows } = await appkit.lakebase.query(`SELECT COUNT(*)::int AS n FROM ${SCHEMA}.operation`);
+  const { rows } = await lakebaseQuery(appkit, `SELECT COUNT(*)::int AS n FROM ${SCHEMA}.operation`);
   const count = Number((rows[0]?.n as number) ?? 0);
   if (count === 0) {
     for (const bundle of SEED_SOURCES) {
-      await appkit.lakebase.query(writeBundleSql(bundle));
+      await lakebaseQuery(appkit, writeBundleSql(bundle));
     }
     console.log(`[metadata] Seeded ${SEED_SOURCES.length} demo sources into ${SCHEMA}.*`);
   } else {
@@ -178,7 +179,7 @@ export function registerMetadataRoutes(appkit: AppKit): void {
 
     app.get('/api/sources', async (_req, res) => {
       try {
-        const { rows } = await appkit.lakebase.query(SOURCES_QUERY);
+        const { rows } = await lakebaseQuery(appkit, SOURCES_QUERY);
         res.json(rows.map(rowToBundle));
       } catch (err) {
         console.error('Failed to list sources:', err);
@@ -193,7 +194,7 @@ export function registerMetadataRoutes(appkit: AppKit): void {
         return;
       }
       try {
-        const exists = await appkit.lakebase.query(
+        const exists = await lakebaseQuery(appkit, 
           `SELECT 1 FROM ${SCHEMA}.operation WHERE operation_id = $1`,
           [parsed.data.operation.operation_id],
         );
@@ -201,7 +202,7 @@ export function registerMetadataRoutes(appkit: AppKit): void {
           res.status(409).json({ error: `operation_id "${parsed.data.operation.operation_id}" already exists` });
           return;
         }
-        await appkit.lakebase.query(writeBundleSql(bundleFrom(parsed.data)));
+        await lakebaseQuery(appkit, writeBundleSql(bundleFrom(parsed.data)));
         res.status(201).json(parsed.data);
       } catch (err) {
         console.error('Failed to create source:', err);
@@ -220,7 +221,7 @@ export function registerMetadataRoutes(appkit: AppKit): void {
         return;
       }
       try {
-        const exists = await appkit.lakebase.query(
+        const exists = await lakebaseQuery(appkit, 
           `SELECT 1 FROM ${SCHEMA}.operation WHERE operation_id = $1`,
           [req.params.operation_id],
         );
@@ -228,7 +229,7 @@ export function registerMetadataRoutes(appkit: AppKit): void {
           res.status(404).json({ error: 'Operation not found' });
           return;
         }
-        await appkit.lakebase.query(writeBundleSql(bundleFrom(parsed.data)));
+        await lakebaseQuery(appkit, writeBundleSql(bundleFrom(parsed.data)));
         res.json(parsed.data);
       } catch (err) {
         console.error('Failed to update source:', err);
@@ -243,7 +244,7 @@ export function registerMetadataRoutes(appkit: AppKit): void {
         return;
       }
       try {
-        const { rows } = await appkit.lakebase.query(
+        const { rows } = await lakebaseQuery(appkit, 
           `UPDATE ${SCHEMA}.operation SET enabled = $1 WHERE operation_id = $2 RETURNING operation_id, enabled`,
           [enabled, req.params.operation_id],
         );

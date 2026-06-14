@@ -111,10 +111,31 @@ export function operationValues(o: Operation): Literal[] {
   ];
 }
 
-/** SQL literal escaping shared by Postgres (Lakebase) and Databricks SQL (Delta). */
-export function lit(v: Literal): string {
+/** Target SQL dialect for {@link lit}. Backslash handling differs between them. */
+export type SqlDialect = 'postgres' | 'databricks';
+
+/**
+ * SQL literal escaping shared by Postgres (Lakebase) and Databricks SQL (Delta).
+ *
+ * Single quotes are always doubled. Backslashes are the dialect-sensitive part:
+ *  - **Postgres (Lakebase):** with `standard_conforming_strings` on (the default),
+ *    a backslash is an ordinary character inside a string literal, so it must NOT be
+ *    escaped — doubling it would store two backslashes and break round-tripping.
+ *  - **Databricks / Spark SQL (Delta):** a backslash is an escape character inside
+ *    string literals by default, so a value containing (or ending in) a backslash —
+ *    e.g. a Windows-style `file_path` or a `wildcard_pattern` — would corrupt the
+ *    generated INSERT OVERWRITE unless the backslash is itself escaped.
+ *
+ * Order matters: escape backslashes BEFORE doubling quotes so the escaping passes
+ * stay independent and values with both backslashes and quotes round-trip safely.
+ */
+export function lit(v: Literal, dialect: SqlDialect = 'postgres'): string {
   if (v === null || v === undefined) return 'NULL';
   if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
   if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
-  return `'${v.replace(/'/g, "''")}'`;
+  const escaped =
+    dialect === 'databricks'
+      ? v.replace(/\\/g, '\\\\').replace(/'/g, "''")
+      : v.replace(/'/g, "''");
+  return `'${escaped}'`;
 }
