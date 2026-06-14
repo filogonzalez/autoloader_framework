@@ -108,9 +108,11 @@ VALUES
    'append', TRUE, 'addNewColumns', FALSE, FALSE, FALSE, 1000, NULL,
    'Append POS Parquet; evolve schema additively', current_timestamp()),
 
-  -- Supplier ACME: headerless CSV with explicit schema, append
+  -- Supplier ACME: headerless CSV with explicit schema, append.
+  -- Explicit schema => evolution mode must be 'none' (Auto Loader constraint);
+  -- off-schema data is still preserved in _rescued_data.
   ('op_supplier_acme', TRUE, 'src_supplier_acme', 'tgt_supplier_acme',
-   'append', TRUE, 'addNewColumns', FALSE, FALSE, FALSE, 1000, NULL,
+   'append', TRUE, 'none', FALSE, FALSE, FALSE, 1000, NULL,
    'Append supplier ACME headerless pipe CSV using explicit schema', current_timestamp()),
 
   -- CRM customers: upsert current-state records keyed on customer_id

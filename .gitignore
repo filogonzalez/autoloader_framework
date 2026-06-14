@@ -27,3 +27,7 @@ __pycache__/
 # Agent instructions — kept LOCAL per user choice (all_local). Remove these two lines to share.
 AGENTS.md
 CLAUDE.md
+
+# polly orchestration scaffolding (local)
+.polly/
+.worktrees/

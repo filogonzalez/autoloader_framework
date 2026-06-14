@@ -14,6 +14,19 @@ Framework Instead using Databricks Autoloader*](https://medium.com/@divyanshgoya
 
 ---
 
+## Table of contents
+
+1. [Product Requirements (PRD)](#1-product-requirements-prd)
+2. [Architecture](#2-architecture)
+3. [Repository layout](#3-repository-layout)
+4. [The demo sources](#4-the-demo-sources)
+5. [How to run](#5-how-to-run)
+6. [Onboarding a new source](#6-onboarding-a-new-source-the-whole-point)
+7. [Using ADLS (abfss) instead of UC Volumes](#7-using-adls-abfss-instead-of-uc-volumes)
+8. [Configuration reference](#8-configuration-reference)
+
+---
+
 ## 1. Product Requirements (PRD)
 
 ### Problem
@@ -52,30 +65,227 @@ source variation.
 
 ## 2. Architecture
 
-```
-            metadata.operation  ──┐  (1 runtime param: operation_id)
-            metadata.object      ──┤
-                                   ▼
-  raw files ──►  10_ingestion_framework  ──►  Bronze Delta tables
- (UC Volume       (Auto Loader cloudFiles)     autoloader_demo.bronze.*
-  or abfss)              │
-                         └──►  metadata.ingestion_audit_log
+### 2.1 The big picture
+
+The framework cleanly separates a **control plane** (metadata you edit) from a **data
+plane** (the single notebook that executes). The only coupling between a source and the
+engine is one runtime parameter: `operation_id`.
+
+```mermaid
+flowchart LR
+    subgraph CP["🗂️ Control plane — metadata (you edit this)"]
+        OP["operation<br/><i>binds source→target + behavior</i>"]
+        OBJ["object<br/><i>source &amp; target registry</i>"]
+        OP -->|"source / target ids"| OBJ
+    end
+
+    subgraph SRC["📥 Sources (raw files)"]
+        V["UC Volume<br/>/Volumes/.../raw/"]
+        A["ADLS Gen2<br/>abfss://…"]
+    end
+
+    subgraph DP["⚙️ Data plane — one notebook"]
+        FW["10_ingestion_framework.py<br/><b>cloudFiles (Auto Loader)</b><br/>param: operation_id"]
+        CKPT[("Checkpoints<br/>per operation")]
+        FW --> CKPT
+    end
+
+    subgraph OUT["🥉 Bronze (Delta, faithful capture)"]
+        T["autoloader_demo.bronze.*"]
+        AUD["metadata.ingestion_audit_log<br/><i>one row per run</i>"]
+    end
+
+    OP ==>|operation_id| FW
+    OBJ -.->|resolved config| FW
+    V --> FW
+    A --> FW
+    FW ==> T
+    FW ==> AUD
+
+    classDef meta fill:#e8f0fe,stroke:#4285f4,color:#111;
+    classDef data fill:#fff4e5,stroke:#fb8c00,color:#111;
+    classDef out fill:#e6f4ea,stroke:#34a853,color:#111;
+    class OBJ,OP meta;
+    class FW,CKPT data;
+    class T,AUD out;
 ```
 
-The framework executes five steps, each fully config-driven:
-1. **Load config** — read the operation + its source/target objects into a flat dict.
-2. **Build format options** — base options + format-specific options merged from metadata.
-3. **Build reader** — `cloudFiles` stream; explicit schema, faithful-capture cast,
-   array explode, audit columns.
-4. **Route writes** — `append` / `merge` / `overwrite` from `load_type`.
-5. **Entry point** — `trigger(availableNow=True)`, then write the audit row.
+**How to read it:** you describe a source and a target as rows in `object`, then bind
+them with a row in `operation`. At runtime you hand the framework a single
+`operation_id`; it resolves the full config, reads the raw files with Auto Loader,
+writes faithfully to a Bronze Delta table, tracks processed files in a per-operation
+checkpoint (for exactly-once), and records the outcome in the audit log.
 
-### Metadata model
-- **`object`** — unified registry of `source` and `target` data objects (sparse,
-  type-discriminated). Sources describe *where/how to read*; targets *where/how to write*.
-- **`operation`** — binds one source to one target and declares the run behavior. The
-  `operation_id` is the single runtime parameter.
-- **`ingestion_audit_log`** — one row per run.
+### 2.2 The metadata model
+
+Two tables drive everything. `object` is a **sparse, type-discriminated** registry:
+a row is either a `source` (where/how to read) or a `target` (where/how to write).
+`operation` joins one source to one target and declares the run behavior.
+
+```mermaid
+erDiagram
+    OPERATION ||--|| OBJECT_SOURCE : "source_object_id"
+    OPERATION ||--|| OBJECT_TARGET : "target_object_id"
+    OPERATION ||--o{ AUDIT_LOG : "logs runs"
+
+    OBJECT_SOURCE {
+        string object_id PK
+        string object_type "= source"
+        string storage_account "NULL → UC Volume path"
+        string container
+        string file_path
+        string wildcard_pattern
+        string file_format "csv|json|jsonl|parquet|avro|xml"
+        string row_tag "XML only"
+        string object_schema "Spark JSON DDL (optional)"
+        string delimiter
+        string encoding
+        string null_value
+    }
+
+    OBJECT_TARGET {
+        string object_id PK
+        string object_type "= target"
+        string target_catalog
+        string target_schema
+        string target_table
+        string table_path "external Delta (optional)"
+        string partition_cols
+        string merge_keys
+    }
+
+    OPERATION {
+        string operation_id PK "the runtime parameter"
+        boolean enabled
+        string source_object_id FK
+        string target_object_id FK
+        string load_type "append|merge|overwrite"
+        boolean merge_schema
+        string schema_evolution_mode
+        boolean cast_all_as_string
+        boolean multiline
+        boolean case_sensitive
+        int max_files_per_trigger
+        string explode_key
+    }
+
+    AUDIT_LOG {
+        string operation_id
+        timestamp run_ts
+        string status "SUCCESS|FAILED"
+        bigint duration_ms
+        bigint rows_written
+        string error_message
+    }
+```
+
+> Both `OBJECT_SOURCE` and `OBJECT_TARGET` above are the **same physical table**
+> (`metadata.object`); the diagram splits them only to show which columns each row
+> *type* uses. Source rows leave the `target_*` columns NULL and vice-versa.
+
+### 2.3 Execution flow — the five steps
+
+The notebook (`10_ingestion_framework.py`) is a straight, branch-light pipeline. All
+format-specific logic collapses into Step 2; there are no per-source `if` branches
+elsewhere.
+
+```mermaid
+flowchart TD
+    START(["operation_id (widget)"]) --> S1
+
+    subgraph S1["① load_config"]
+        L1["Read operation row (must exist &amp; be enabled)"]
+        L2["Read source object + target object"]
+        L3["Resolve full_path<br/>abfss:// if storage_account else file_path verbatim"]
+        L4["Parse explicit schema from JSON DDL (if any)"]
+        L1 --> L2 --> L3 --> L4
+    end
+
+    S1 --> S2
+
+    subgraph S2["② build_format_options"]
+        F1["Base: schemaEvolutionMode + rescuedDataColumn=_rescued_data"]
+        F2["maxFilesPerTrigger (if set)"]
+        F3["inferColumnTypes = NOT cast_all_as_string (text formats)"]
+        F4["Per-format keys: csv/json/jsonl/parquet/avro/xml"]
+        F1 --> F2 --> F3 --> F4
+    end
+
+    S2 --> S3
+
+    subgraph S3["③ build_reader"]
+        R1["spark.readStream.format('cloudFiles') + options"]
+        R2["Apply explicit schema if supplied"]
+        R3["cast_all_as_string → cast every col to STRING"]
+        R4["explode_key → flatten top-level array"]
+        R5["Add audit cols: _source_file, _ingested_at, _operation_id"]
+        R1 --> R2 --> R3 --> R4 --> R5
+    end
+
+    S3 --> S4
+
+    subgraph S4["④ write_batch (foreachBatch)"]
+        W{"load_type?"}
+        WA["append<br/>+ mergeSchema, partitionBy"]
+        WM["merge<br/>seed table, then MERGE on merge_keys"]
+        WO["overwrite<br/>+ overwriteSchema"]
+        W -->|append| WA
+        W -->|merge| WM
+        W -->|overwrite| WO
+    end
+
+    S4 --> S5
+
+    subgraph S5["⑤ entry point"]
+        E1["trigger(availableNow=True) → process all files once, stop"]
+        E2["finally: INSERT into ingestion_audit_log<br/>(SUCCESS/FAILED, duration, rows)"]
+        E1 --> E2
+    end
+
+    S5 --> DONE(["Bronze table + audit row"])
+
+    classDef step fill:#f5f5f5,stroke:#888,color:#111;
+    class S1,S2,S3,S4,S5 step;
+```
+
+### 2.4 Exactly-once across restarts
+
+Each operation owns an isolated checkpoint directory under the `checkpoints` volume.
+Auto Loader records which files it has already processed there, so re-running an
+operation is safe — only **new** files are ingested.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as Caller (job / widget)
+    participant FW as 10_ingestion_framework
+    participant CK as Checkpoint<br/>(per operation)
+    participant SRC as Raw files
+    participant B as Bronze Delta
+    participant AUD as Audit log
+
+    U->>FW: operation_id
+    FW->>FW: load_config + build options/reader
+    FW->>CK: read processed-file list
+    FW->>SRC: list files at full_path
+    Note over FW,SRC: only files NOT in checkpoint are new
+    FW->>B: write new rows (append/merge/overwrite)
+    FW->>CK: commit newly processed files
+    FW->>AUD: INSERT status, duration, rows
+    FW-->>U: JSON {operation_id, status, rows_written}
+
+    Note over U,AUD: Re-run with no new files → 0 rows, counts stay stable
+```
+
+### 2.5 Summary of the runtime contract
+
+| Stage | Function | Driven by | Output |
+|-------|----------|-----------|--------|
+| ① | `load_config` | `operation` + `object` rows | flat config dict |
+| ② | `build_format_options` | `file_format`, evolution & parsing flags | Auto Loader options dict |
+| ③ | `build_reader` | path, schema, `cast_all_as_string`, `explode_key` | streaming DataFrame + audit cols |
+| ④ | `write_batch` | `load_type`, `merge_keys`, `partition_cols` | Bronze Delta table |
+| ⑤ | entry point | `availableNow=True` | audit row + notebook exit JSON |
 
 ---
 
@@ -91,10 +301,24 @@ autoloader_framework/
 │  │  ├─ 01_setup_metadata.sql            # DDL: catalog, schemas, volumes, metadata tables
 │  │  └─ 02_seed_metadata.sql             # Seed: 6 demo retail sources
 │  └─ notebooks/
-│     ├─ 00_generate_sample_data.py       # Writes sample files into the landing volume
-│     ├─ 10_ingestion_framework.py        # THE framework (parameterized by operation_id)
-│     └─ 20_run_demo.py                   # Driver: runs every enabled operation + inspects
+│     ├─ 01_setup.py                       # Runs the .sql DDL+seed on serverless (job task 1)
+│     ├─ 00_generate_sample_data.py        # Writes sample files into the landing volume
+│     ├─ 10_ingestion_framework.py         # THE framework (parameterized by operation_id)
+│     └─ 20_run_demo.py                    # Driver: runs every enabled operation + inspects
 └─ README.md
+```
+
+The Lakeflow Job (`autoloader_framework.job.yml`) wires three notebook tasks in
+sequence: `setup` → `generate_sample_data` → `run_framework`.
+
+```mermaid
+flowchart LR
+    A["setup<br/>01_setup.py<br/><i>DDL + seed + reset</i>"]
+    B["generate_sample_data<br/>00_generate_sample_data.py<br/><i>write raw files</i>"]
+    C["run_framework<br/>20_run_demo.py<br/><i>ingest all enabled ops</i>"]
+    A --> B --> C
+    classDef t fill:#e8f0fe,stroke:#4285f4,color:#111;
+    class A,B,C t;
 ```
 
 ---
@@ -121,31 +345,45 @@ exact incident that motivated the framework.
 
 ## 5. How to run
 
-> Prereqs: Databricks CLI authenticated to the target workspace, Unity Catalog enabled,
-> and permission to create a catalog (or change the catalog name in the SQL/metadata).
+> Prereq: the `autoloader_demo` **catalog must exist**. On metastores with *Default
+> Storage* (no metastore storage root), create it once with a managed location, e.g.:
+> ```bash
+> databricks catalogs create autoloader_demo \
+>   --storage-root "abfss://<container>@<account>.dfs.core.windows.net/<path>/autoloader_demo"
+> ```
+> (or via the UI using Default Storage). The `.sql` keeps a portable
+> `CREATE CATALOG IF NOT EXISTS`; the setup notebook **skips** it since the catalog is a
+> prerequisite here. Everything else (schemas, volumes, tables, seed) is created for you.
 
-### Option A — interactively (recommended for a demo)
-1. Run **`src/sql/01_setup_metadata.sql`** in the SQL editor or a notebook (`%sql`).
-2. Run **`src/sql/02_seed_metadata.sql`**.
-3. Run notebook **`src/notebooks/00_generate_sample_data.py`**.
-4. Run notebook **`src/notebooks/20_run_demo.py`** — it loops over every enabled
-   operation, calls the framework, then displays the audit log and Bronze tables.
-
-To ingest a single source, run **`10_ingestion_framework.py`** with the widget
-`operation_id` set (e.g. `op_crm_customers`).
-
-### Option B — as a deployed Job (DABs)
+### Option A — one command (recommended), fully on serverless
 ```bash
 databricks bundle validate -t dev
 databricks bundle deploy   -t dev
-# run SQL steps 1-2 once (SQL editor), then:
 databricks bundle run autoloader_framework_demo -t dev
 ```
+The job runs three tasks: **setup** (DDL + seed + reset) → **generate_sample_data** →
+**run_framework** (ingests every enabled operation, then emits a JSON summary with
+per-operation status and Bronze row counts).
 
-### Re-running
-Re-run `20_run_demo.py` and counts stay stable: Auto Loader's checkpoints skip
-already-processed files. Regenerate `00_generate_sample_data` to add a *new* file and
-watch only the delta get ingested.
+Verified end-to-end result (serverless): all six operations `SUCCESS` —
+`pos_transactions`=20, `supplier_acme_inventory`=4, `crm_customers`=4,
+`supplier_edi_orders`=2, `clickstream_events`=3, `loyalty_history`=4.
+
+### Option B — interactively
+Run the notebooks in order: `01_setup.py` → `00_generate_sample_data.py` →
+`20_run_demo.py`. To ingest a single source, run `10_ingestion_framework.py` with the
+widget `operation_id` set (e.g. `op_crm_customers`).
+
+The framework notebook also exposes three other widgets with sensible defaults:
+`metadata_catalog` (`autoloader_demo`), `metadata_schema` (`metadata`), and
+`checkpoint_root` (`/Volumes/autoloader_demo/landing/checkpoints`).
+
+### Re-running & idempotency
+- A full `bundle run` is **reproducible**: `01_setup.py` drops the Bronze tables and
+  clears checkpoints, so counts are identical every time.
+- To demonstrate **exactly-once across restarts**, re-run *only* the `run_framework`
+  task — checkpoints then persist and already-processed files are skipped (counts stay
+  stable). Drop a new file into the landing volume and only the delta is ingested.
 
 ---
 
@@ -177,6 +415,15 @@ VALUES ('op_returns', true, 'src_returns', 'tgt_returns', 'append', true, 'addNe
 The next scheduler cycle (or a manual run of `10_ingestion_framework` with
 `operation_id=op_returns`) picks it up. No notebook. No PR. No deployment.
 
+```mermaid
+flowchart LR
+    I1["INSERT source object"] --> I2["INSERT target object"] --> I3["INSERT operation"]
+    I3 --> RUN["run framework with<br/>operation_id=op_returns"]
+    RUN --> OUT["new Bronze table"]
+    classDef s fill:#e6f4ea,stroke:#34a853,color:#111;
+    class I1,I2,I3,RUN,OUT s;
+```
+
 ---
 
 ## 7. Using ADLS (abfss) instead of UC Volumes
@@ -189,7 +436,9 @@ in `file_path`. The framework then resolves:
 abfss://{container}@{storage_account}.dfs.core.windows.net{file_path}{wildcard_pattern}
 ```
 
-Everything else — format options, evolution, write routing — is identical.
+When `storage_account` is NULL, `file_path` (plus `wildcard_pattern`) is used verbatim —
+which is what makes the same code work for UC Volumes. Everything else — format options,
+evolution, write routing — is identical.
 
 ---
 
@@ -206,3 +455,19 @@ Everything else — format options, evolution, write routing — is identical.
 `schema_evolution_mode` (`addNewColumns`/`rescue`/`failOnNewColumns`/`none`),
 `cast_all_as_string`, `multiline`, `case_sensitive`, `max_files_per_trigger`,
 `explode_key`, `enabled`.
+
+### Behavioral notes worth knowing
+- **Explicit schema + `addNewColumns`:** Auto Loader rejects `schemaEvolutionMode=addNewColumns`
+  when an explicit schema is supplied. The framework automatically falls back to `none`
+  for explicit-schema sources; off-schema data is still preserved via `_rescued_data`.
+- **`inferColumnTypes`** is set to the inverse of `cast_all_as_string`, and only for
+  inferable text formats (`csv`, `json`, `jsonl`, `xml`).
+- **`case_sensitive`** is retained in metadata for downstream/Silver use; Auto Loader has
+  no `cloudFiles.caseSensitive` option, so Bronze capture stays at the Spark default.
+- **Audit columns** added to every row: `_source_file`, `_ingested_at`, `_operation_id`
+  (plus `_rescued_data` from Auto Loader).
+- **`merge` first run:** if the target table doesn't exist yet, the first batch seeds it
+  with an append; subsequent batches `MERGE` on `merge_keys`.
+- **Row counting on serverless:** because `foreachBatch` runs server-side on Spark
+  Connect, the framework derives `rows_written` from `query.recentProgress` rather than a
+  client-side counter.

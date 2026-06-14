@@ -129,9 +129,19 @@ _INFERABLE = {"csv", "json", "jsonl", "xml"}
 def build_format_options(cfg: dict) -> dict:
     fmt = cfg["file_format"]
 
+    # Auto Loader rejects schemaEvolutionMode=addNewColumns when an explicit schema is
+    # supplied (use schemaHints instead). For explicit-schema sources we fall back to
+    # `none`; off-schema data is still preserved via the rescued-data column.
+    evolution_mode = cfg["schema_evolution_mode"]
+    if cfg["schema"] is not None and evolution_mode == "addNewColumns":
+        evolution_mode = "none"
+
+    # Note: Auto Loader has no `cloudFiles.caseSensitive` option (it rejects unknown
+    # keys). Case sensitivity, when needed, is a Spark conf (spark.sql.caseSensitive);
+    # for faithful Bronze capture we leave it at the default. The `case_sensitive`
+    # metadata column is retained for downstream/Silver use.
     base = {
-        "cloudFiles.schemaEvolutionMode": cfg["schema_evolution_mode"],
-        "cloudFiles.caseSensitive": str(cfg["case_sensitive"]).lower(),
+        "cloudFiles.schemaEvolutionMode": evolution_mode,
         "cloudFiles.rescuedDataColumn": "_rescued_data",
     }
     if cfg["max_files_per_trigger"]:
@@ -309,7 +319,17 @@ try:
         .start()
     )
     query.awaitTermination()
-    print(f"Done. Rows written this run: {counter['rows']}")
+
+    # On Spark Connect (serverless) foreachBatch runs server-side, so the client-side
+    # counter stays 0. Derive rows from the query progress instead.
+    progress_rows = 0
+    for p in (query.recentProgress or []):
+        try:
+            progress_rows += int(p["numInputRows"])
+        except (TypeError, KeyError, ValueError):
+            progress_rows += int(getattr(p, "numInputRows", 0) or 0)
+    counter["rows"] = max(counter["rows"], progress_rows)
+    print(f"Done. Rows ingested this run: {counter['rows']}")
 
 except Exception as e:  # noqa: BLE001
     status, error_msg = "FAILED", str(e).replace("'", "''")

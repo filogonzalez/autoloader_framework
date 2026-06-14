@@ -1,17 +1,22 @@
-# Lakeflow Job that runs the metadata-driven Auto Loader demo end to end.
+# Lakeflow Job that runs the metadata-driven Auto Loader demo end to end on serverless.
 # Deploy with:  databricks bundle deploy -t dev
 # Run with:     databricks bundle run autoloader_framework_demo -t dev
 #
-# The job runs on serverless compute. Run 01_setup_metadata.sql and 02_seed_metadata.sql
-# once in the SQL editor (or as a SQL task against a warehouse) before the first run, so
-# the catalog, schemas, volumes and metadata rows exist.
+# Fully self-contained: setup runs the DDL + seed, generate writes sample files, then the
+# framework ingests every enabled operation. No manual SQL editor step required.
 
 resources:
   jobs:
     autoloader_framework_demo:
       name: "[${bundle.target}] Autoloader Framework Demo"
       tasks:
+        - task_key: setup
+          notebook_task:
+            notebook_path: ../src/notebooks/01_setup.py
+
         - task_key: generate_sample_data
+          depends_on:
+            - task_key: setup
           notebook_task:
             notebook_path: ../src/notebooks/00_generate_sample_data.py
 

@@ -29,12 +29,18 @@ print(f"Enabled operations: {operations}")
 
 # COMMAND ----------
 
-results = []
+import json
+
+results = {}
 for op in operations:
     print(f"\n=== Running {op} ===")
-    out = dbutils.notebook.run(FRAMEWORK_NOTEBOOK, 0, {"operation_id": op})
-    print(out)
-    results.append(out)
+    try:
+        out = dbutils.notebook.run(FRAMEWORK_NOTEBOOK, 0, {"operation_id": op})
+        print(out)
+        results[op] = json.loads(out) if out.strip().startswith("{") else {"status": "SUCCESS", "raw": out}
+    except Exception as e:  # noqa: BLE001
+        print(f"FAILED: {e}")
+        results[op] = {"status": "FAILED", "error": str(e)[:500]}
 
 # COMMAND ----------
 
@@ -52,6 +58,7 @@ display(
 
 # COMMAND ----------
 
+table_counts = {}
 for tbl in [
     "pos_transactions",
     "supplier_acme_inventory",
@@ -62,8 +69,12 @@ for tbl in [
 ]:
     fq = f"autoloader_demo.bronze.{tbl}"
     if spark.catalog.tableExists(fq):
-        print(f"\n### {fq}  (count={spark.table(fq).count()})")
+        cnt = spark.table(fq).count()
+        table_counts[tbl] = cnt
+        print(f"\n### {fq}  (count={cnt})")
         spark.table(fq).show(truncate=False)
+    else:
+        table_counts[tbl] = None
 
 # COMMAND ----------
 
@@ -77,3 +88,14 @@ for tbl in [
 # MAGIC - **`_rescued_data`** column captures anything off-schema instead of dropping it.
 # MAGIC - **Re-run this notebook**: Auto Loader checkpoints skip already-processed files,
 # MAGIC   so counts stay stable — exactly-once, for free.
+
+# COMMAND ----------
+
+# Machine-readable summary surfaced as the job task output.
+summary = {
+    "operations": results,
+    "table_counts": table_counts,
+    "all_success": all(v.get("status") == "SUCCESS" for v in results.values()),
+}
+print(json.dumps(summary, indent=2))
+dbutils.notebook.exit(json.dumps(summary))
