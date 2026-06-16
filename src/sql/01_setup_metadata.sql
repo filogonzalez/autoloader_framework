@@ -81,6 +81,14 @@ CREATE TABLE IF NOT EXISTS autoloader_demo.metadata.object (
 USING DELTA
 COMMENT 'Registry of source and target data objects for the metadata-driven Auto Loader framework';
 
+-- Migration safety net: on workspaces where metadata.object pre-dates the source_format
+-- column, the CREATE TABLE IF NOT EXISTS above is a no-op and the column is never added,
+-- which then breaks 02_seed_metadata.sql's INSERT OVERWRITE (column not found). This
+-- idempotent ALTER adds it to existing tables and is a no-op on freshly created ones.
+ALTER TABLE autoloader_demo.metadata.object
+  ADD COLUMN IF NOT EXISTS source_format STRING
+  COMMENT 'Streaming source type: cloudFiles (Auto Loader over files; default when NULL) | delta (read a Delta TABLE as a stream). For delta, file_path holds the FQ table name catalog.schema.table';
+
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- 2. operation — the unit of work. Binds one source object to one target object and
