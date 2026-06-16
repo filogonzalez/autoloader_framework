@@ -1,7 +1,7 @@
 -- =====================================================================================
 -- Metadata-Driven Autoloader Framework — Demo Seed
 -- -------------------------------------------------------------------------------------
--- Registers six realistic retail sources that exercise every capability of the
+-- Registers seven realistic retail sources that exercise every capability of the
 -- framework. Each is a metadata row — no per-source code exists anywhere.
 --
 -- INSERT OVERWRITE makes this script safely re-runnable (it fully replaces the rows).
@@ -63,6 +63,13 @@ VALUES
    NULL, NULL, NULL, NULL, NULL, NULL,
    'Five years of loyalty history (CSV). customer_tier drifted numeric->string across years', current_timestamp()),
 
+  -- 7) Product catalog — header CSV full snapshot for overwrite loads ──────────────────
+  ('src_product_catalog', 'source', NULL, NULL,
+   '/Volumes/autoloader_demo/landing/raw/product_catalog/', '*.csv',
+   'csv', NULL, NULL, ',', 'UTF-8', '',
+   NULL, NULL, NULL, NULL, NULL, NULL,
+   'Vendor product catalog full snapshot (header CSV, schema inference, overwrite target)', current_timestamp()),
+
   -- ── TARGET objects (Bronze tables) ───────────────────────────────────────────────────
   ('tgt_pos_transactions', 'target', NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
@@ -92,7 +99,12 @@ VALUES
   ('tgt_loyalty_history', 'target', NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'autoloader_demo', 'bronze', 'loyalty_history', NULL, NULL, NULL,
-   'Bronze loyalty history (faithful capture, all columns as STRING)', current_timestamp());
+   'Bronze loyalty history (faithful capture, all columns as STRING)', current_timestamp()),
+
+  ('tgt_product_catalog', 'target', NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, NULL, NULL, NULL,
+   'autoloader_demo', 'bronze', 'product_catalog', NULL, NULL, NULL,
+   'Bronze product catalog (fully replaced by each vendor snapshot)', current_timestamp());
 
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
@@ -133,4 +145,9 @@ VALUES
   -- Loyalty history: faithful historical capture — land everything as STRING
   ('op_loyalty_history', TRUE, 'src_loyalty_history', 'tgt_loyalty_history',
    'append', TRUE, 'rescue', TRUE, FALSE, FALSE, 1000, NULL,
-   'Historical loyalty load; cast_all_as_string survives multi-year type drift', current_timestamp());
+   'Historical loyalty load; cast_all_as_string survives multi-year type drift', current_timestamp()),
+
+  -- Product catalog: vendor sends the complete current snapshot each day
+  ('op_product_catalog', TRUE, 'src_product_catalog', 'tgt_product_catalog',
+   'overwrite', TRUE, 'addNewColumns', FALSE, FALSE, FALSE, 1000, NULL,
+   'Full-snapshot product catalog load; overwrite fully replaces Bronze each run', current_timestamp());

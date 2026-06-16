@@ -8,7 +8,7 @@
 # MAGIC
 # MAGIC Order of execution for a clean demo:
 # MAGIC 1. `01_setup_metadata.sql`      (catalog/schemas/volumes/tables)
-# MAGIC 2. `02_seed_metadata.sql`       (register the six demo sources)
+# MAGIC 2. `02_seed_metadata.sql`       (register the seven demo sources)
 # MAGIC 3. `00_generate_sample_data`    (write raw files to the landing volume)
 # MAGIC 4. **this notebook**            (run the framework over every operation)
 
@@ -66,6 +66,7 @@ for tbl in [
     "supplier_edi_orders",
     "clickstream_events",
     "loyalty_history",
+    "product_catalog",
 ]:
     fq = f"autoloader_demo.bronze.{tbl}"
     if spark.catalog.tableExists(fq):
@@ -80,11 +81,12 @@ for tbl in [
 
 # MAGIC %md
 # MAGIC ### What to point out in the demo
-# MAGIC - **One notebook, six formats.** No per-source code — only metadata rows differ.
+# MAGIC - **One notebook, seven sources.** No per-source code — only metadata rows differ.
 # MAGIC - **`loyalty_history`** landed 2018 (numeric tier) and 2024 (string tier) together,
 # MAGIC   all columns as STRING. No failure, no mixed-partition mess.
 # MAGIC - **`crm_customers`** merged on `customer_id` — C002 updated in place, C003 inserted.
 # MAGIC - **`clickstream_events`** exploded the `events[]` array into one row per event.
+# MAGIC - **`product_catalog`** uses overwrite because each vendor file is a full snapshot.
 # MAGIC - **`_rescued_data`** column captures anything off-schema instead of dropping it.
 # MAGIC - **Re-run this notebook**: Auto Loader checkpoints skip already-processed files,
 # MAGIC   so counts stay stable — exactly-once, for free.
