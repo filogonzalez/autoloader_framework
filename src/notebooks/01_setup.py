@@ -88,6 +88,34 @@ def run_sql_file(filename: str):
 # COMMAND ----------
 
 run_sql_file("01_setup_metadata.sql")
+
+
+# Schema migration — backfill `source_format` on a pre-existing metadata.object.
+# On workspaces where metadata.object predates the column, CREATE TABLE IF NOT EXISTS is a
+# no-op and the column stays missing, which breaks 02_seed_metadata.sql's INSERT OVERWRITE.
+# Databricks SQL has no idempotent single-statement ALTER (ADD COLUMN IF NOT EXISTS is a
+# parse error; a bare ADD COLUMNS errors if the column already exists), so we guard on
+# information_schema and add the column only when absent — safe on fresh and existing tables.
+def ensure_source_format_column():
+    present = spark.sql(  # noqa: F821
+        "SELECT count(*) AS n FROM autoloader_demo.information_schema.columns "
+        "WHERE table_schema = 'metadata' AND table_name = 'object' "
+        "AND column_name = 'source_format'"
+    ).collect()[0]["n"]
+    if present:
+        print("migration: metadata.object.source_format already present — no-op")
+        return
+    spark.sql(  # noqa: F821
+        "ALTER TABLE autoloader_demo.metadata.object ADD COLUMNS ("
+        "source_format STRING COMMENT 'Streaming source type: cloudFiles (Auto Loader "
+        "over files; default when NULL) | delta (read a Delta TABLE as a stream). For "
+        "delta, file_path holds the FQ table name catalog.schema.table')"
+    )
+    print("migration: added metadata.object.source_format")
+
+
+ensure_source_format_column()
+
 run_sql_file("02_seed_metadata.sql")
 
 # COMMAND ----------

@@ -81,6 +81,14 @@ CREATE TABLE IF NOT EXISTS autoloader_demo.metadata.object (
 USING DELTA
 COMMENT 'Registry of source and target data objects for the metadata-driven Auto Loader framework';
 
+-- NOTE: on workspaces where metadata.object pre-dates the `source_format` column (added
+-- alongside Delta streaming sources), the CREATE TABLE IF NOT EXISTS above is a no-op and
+-- the column is never added — which then breaks 02_seed_metadata.sql's INSERT OVERWRITE.
+-- Databricks SQL has no idempotent single-statement ALTER for this (ADD COLUMN IF NOT
+-- EXISTS is a PARSE_SYNTAX_ERROR; a bare ADD COLUMNS errors FIELD_ALREADY_EXISTS on
+-- re-run). The backfill is therefore performed by an information_schema-guarded migration
+-- step in 01_setup.py, which runs before the seed.
+
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- 2. operation — the unit of work. Binds one source object to one target object and
