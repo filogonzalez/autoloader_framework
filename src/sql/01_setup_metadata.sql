@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS autoloader_demo.metadata.object (
   object_type       STRING    NOT NULL  COMMENT 'source | target',
 
   -- ── SOURCE attributes ───────────────────────────────────────────────────────────────
+  source_format     STRING              COMMENT 'Streaming source type: cloudFiles (Auto Loader over files; default when NULL) | delta (read a Delta TABLE as a stream). For delta, file_path holds the FQ table name catalog.schema.table',
   storage_account   STRING              COMMENT 'ADLS Gen2 storage account for abfss paths. NULL => file_path is used verbatim (e.g. a UC Volume path)',
   container         STRING              COMMENT 'ADLS container name (abfss only)',
   file_path         STRING              COMMENT 'Base path of source files. UC Volume: /Volumes/cat/schema/vol/...  |  abfss: path after the container',
