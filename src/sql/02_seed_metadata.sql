@@ -14,20 +14,20 @@
 -- SOURCE + TARGET objects
 -- ─────────────────────────────────────────────────────────────────────────────────────
 INSERT OVERWRITE autoloader_demo.metadata.object
-  (object_id, object_type, storage_account, container, file_path, wildcard_pattern,
+  (object_id, object_type, source_format, storage_account, container, file_path, wildcard_pattern,
    file_format, row_tag, object_schema, delimiter, encoding, null_value,
    target_catalog, target_schema, target_table, table_path, partition_cols, merge_keys,
    description, created_at)
 VALUES
   -- 1) POS transactions — columnar Parquet, accumulating event data ──────────────────────
-  ('src_pos_transactions', 'source', NULL, NULL,
+  ('src_pos_transactions', 'source', 'cloudFiles', NULL, NULL,
    '/Volumes/autoloader_demo/landing/raw/pos/transactions/', '*.parquet',
    'parquet', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'POS transaction feed from stores (Parquet, append-only events)', current_timestamp()),
 
   -- 2) Supplier ACME inventory — headerless, pipe-delimited CSV w/ explicit schema ──────
-  ('src_supplier_acme', 'source', NULL, NULL,
+  ('src_supplier_acme', 'source', 'cloudFiles', NULL, NULL,
    '/Volumes/autoloader_demo/landing/raw/suppliers/acme/', '*.csv',
    'csv', NULL,
    '{"type":"struct","fields":[{"name":"supplier_id","type":"string","nullable":true,"metadata":{}},{"name":"sku","type":"string","nullable":true,"metadata":{}},{"name":"product_name","type":"string","nullable":true,"metadata":{}},{"name":"qty_on_hand","type":"integer","nullable":true,"metadata":{}},{"name":"unit_cost","type":"double","nullable":true,"metadata":{}},{"name":"last_updated","type":"string","nullable":true,"metadata":{}}]}',
@@ -36,63 +36,95 @@ VALUES
    'Supplier ACME inventory (headerless pipe-delimited CSV, explicit schema)', current_timestamp()),
 
   -- 3) CRM customers — JSON, current-state records resent over time (upsert) ─────────────
-  ('src_crm_customers', 'source', NULL, NULL,
+  ('src_crm_customers', 'source', 'cloudFiles', NULL, NULL,
    '/Volumes/autoloader_demo/landing/raw/crm/customers/', '*.json',
    'json', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'CRM customer master extract (JSON, represents current state -> merge)', current_timestamp()),
 
   -- 4) Supplier EDI orders — XML with a row tag ─────────────────────────────────────────
-  ('src_supplier_edi', 'source', NULL, NULL,
+  ('src_supplier_edi', 'source', 'cloudFiles', NULL, NULL,
    '/Volumes/autoloader_demo/landing/raw/suppliers/edi/', '*.xml',
    'xml', 'Order', NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'Supplier EDI purchase orders (XML, rowTag=Order)', current_timestamp()),
 
   -- 5) Clickstream events — JSONL with a top-level array to explode ──────────────────────
-  ('src_clickstream', 'source', NULL, NULL,
+  ('src_clickstream', 'source', 'cloudFiles', NULL, NULL,
    '/Volumes/autoloader_demo/landing/raw/clickstream/events/', '*.jsonl',
    'jsonl', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'Web clickstream export (JSONL, records wrapped in an events[] array)', current_timestamp()),
 
   -- 6) Loyalty history — CSV historical load with multi-year schema drift ───────────────
-  ('src_loyalty_history', 'source', NULL, NULL,
+  ('src_loyalty_history', 'source', 'cloudFiles', NULL, NULL,
    '/Volumes/autoloader_demo/landing/raw/crm/loyalty_history/', '*.csv',
    'csv', NULL, NULL, ',', 'UTF-8', '',
    NULL, NULL, NULL, NULL, NULL, NULL,
    'Five years of loyalty history (CSV). customer_tier drifted numeric->string across years', current_timestamp()),
 
+  -- 7) POS transactions (Delta-table-as-source) — stream the Bronze POS table itself ─────
+  --    Demonstrates streaming-TABLE ingestion (source_format='delta') via availableNow.
+  --    file_path holds the FQ table name; storage_account/container/file_format are unused.
+  ('src_pos_bronze_stream', 'source', 'delta', NULL, NULL,
+   'autoloader_demo.bronze.pos_transactions', NULL,
+   NULL, NULL, NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, NULL, NULL, NULL,
+   'Delta-table-as-source: streams the Bronze POS table as a stream (availableNow)', current_timestamp()),
+
+  -- 8) abfss / ADLS Gen2 source TEMPLATE (DISABLED) ─────────────────────────────────────
+  --    PREREQUISITE: a Unity Catalog EXTERNAL LOCATION + STORAGE CREDENTIAL covering this
+  --    abfss path must be provisioned by an admin out-of-band. Credentials are NOT metadata
+  --    (see AGENTS.md) — none are stored here. This row is a copy-paste-ready template only;
+  --    its operation is disabled because the demo workspace has no such storage account.
+  ('src_abfss_template', 'source', 'cloudFiles', 'examplestorageacct', 'raw',
+   '/vendor/orders/', 'year=*/month=*/*.parquet',
+   'parquet', NULL, NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, NULL, NULL, NULL,
+   'abfss/ADLS Gen2 source template (DISABLED) — requires admin-provisioned UC external location', current_timestamp()),
+
   -- ── TARGET objects (Bronze tables) ───────────────────────────────────────────────────
-  ('tgt_pos_transactions', 'target', NULL, NULL, NULL, NULL,
+  ('tgt_pos_transactions', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'autoloader_demo', 'bronze', 'pos_transactions', NULL, 'load_date', NULL,
    'Bronze POS transactions (partitioned by load_date)', current_timestamp()),
 
-  ('tgt_supplier_acme', 'target', NULL, NULL, NULL, NULL,
+  ('tgt_supplier_acme', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'autoloader_demo', 'bronze', 'supplier_acme_inventory', NULL, NULL, NULL,
    'Bronze supplier ACME inventory', current_timestamp()),
 
-  ('tgt_crm_customers', 'target', NULL, NULL, NULL, NULL,
+  ('tgt_crm_customers', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'autoloader_demo', 'bronze', 'crm_customers', NULL, NULL, 'customer_id',
    'Bronze CRM customers (upsert keyed on customer_id)', current_timestamp()),
 
-  ('tgt_supplier_edi', 'target', NULL, NULL, NULL, NULL,
+  ('tgt_supplier_edi', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'autoloader_demo', 'bronze', 'supplier_edi_orders', NULL, NULL, NULL,
    'Bronze supplier EDI orders', current_timestamp()),
 
-  ('tgt_clickstream', 'target', NULL, NULL, NULL, NULL,
+  ('tgt_clickstream', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'autoloader_demo', 'bronze', 'clickstream_events', NULL, NULL, NULL,
    'Bronze clickstream events (one row per exploded event)', current_timestamp()),
 
-  ('tgt_loyalty_history', 'target', NULL, NULL, NULL, NULL,
+  ('tgt_loyalty_history', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'autoloader_demo', 'bronze', 'loyalty_history', NULL, NULL, NULL,
-   'Bronze loyalty history (faithful capture, all columns as STRING)', current_timestamp());
+   'Bronze loyalty history (faithful capture, all columns as STRING)', current_timestamp()),
+
+  -- Target for the Delta-table-as-source stream (new Bronze table, append load) ──────────
+  ('tgt_pos_stream_replica', 'target', NULL, NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, NULL, NULL, NULL,
+   'autoloader_demo', 'bronze', 'pos_transactions_stream_replica', NULL, NULL, NULL,
+   'Bronze replica fed by streaming the POS Bronze table (Delta-as-source demo)', current_timestamp()),
+
+  -- Target for the abfss template (DISABLED operation) ──────────────────────────────────
+  ('tgt_abfss_template', 'target', NULL, NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, NULL, NULL, NULL,
+   'autoloader_demo', 'bronze', 'abfss_vendor_orders', NULL, NULL, NULL,
+   'Bronze target for the abfss source template (DISABLED)', current_timestamp());
 
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
@@ -133,4 +165,16 @@ VALUES
   -- Loyalty history: faithful historical capture — land everything as STRING
   ('op_loyalty_history', TRUE, 'src_loyalty_history', 'tgt_loyalty_history',
    'append', TRUE, 'rescue', TRUE, FALSE, FALSE, 1000, NULL,
-   'Historical loyalty load; cast_all_as_string survives multi-year type drift', current_timestamp());
+   'Historical loyalty load; cast_all_as_string survives multi-year type drift', current_timestamp()),
+
+  -- Delta-table-as-source: stream the Bronze POS table into a new Bronze replica (append).
+  -- source_format='delta' => no cloudFiles options; trigger(availableNow=True) preserves the
+  -- one-row-per-run audit lifecycle. schema_evolution_mode is ignored for delta sources.
+  ('op_pos_bronze_stream', TRUE, 'src_pos_bronze_stream', 'tgt_pos_stream_replica',
+   'append', TRUE, 'none', FALSE, FALSE, FALSE, NULL, NULL,
+   'Stream the Bronze POS Delta table (availableNow) into a Bronze replica', current_timestamp()),
+
+  -- abfss template operation — DISABLED (no storage account provisioned in the demo).
+  ('op_abfss_template', FALSE, 'src_abfss_template', 'tgt_abfss_template',
+   'append', TRUE, 'addNewColumns', FALSE, FALSE, FALSE, 1000, NULL,
+   'DISABLED template: append abfss Parquet (requires UC external location)', current_timestamp());

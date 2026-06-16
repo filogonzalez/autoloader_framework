@@ -72,12 +72,18 @@ def load_config(spark: SparkSession, operation_id: str) -> dict:
         raise ValueError(f"Target object '{o['target_object_id']}' not found.")
     t = tgt[0].asDict()
 
+    # Streaming source discriminator. cloudFiles (Auto Loader over files) is the default
+    # so the six existing seeded sources keep working when source_format is NULL/absent.
+    # delta reads a Delta TABLE as a stream (file_path holds the FQ table name).
+    source_format = (s.get("source_format") or "cloudFiles").strip()
+
     # Resolve the full source path. With a storage_account -> abfss (article-faithful);
-    # without one -> file_path is used verbatim, which supports UC Volumes for the demo.
+    # without one -> file_path is used verbatim, which supports UC Volumes for the demo
+    # and, for a delta source, the fully-qualified table name catalog.schema.table.
     if s.get("storage_account"):
         full_path = (
             f"abfss://{s['container']}@{s['storage_account']}.dfs.core.windows.net"
-            f"{s['file_path']}{s['wildcard_pattern']}"
+            f"{s['file_path']}{s.get('wildcard_pattern') or ''}"
         )
     else:
         full_path = f"{s['file_path']}{s.get('wildcard_pattern') or ''}"
@@ -93,6 +99,7 @@ def load_config(spark: SparkSession, operation_id: str) -> dict:
     return {
         "operation_id": operation_id,
         "source_id": s["object_id"],
+        "source_format": source_format,
         "full_path": full_path,
         "file_format": s["file_format"],
         "row_tag": s.get("row_tag"),
@@ -199,18 +206,24 @@ def build_format_options(cfg: dict) -> dict:
 
 
 def build_reader(spark: SparkSession, cfg: dict, options: dict) -> DataFrame:
-    checkpoint_path = f"{CHECKPOINT_ROOT}/{cfg['operation_id']}"
-    options["cloudFiles.schemaLocation"] = f"{checkpoint_path}/schema"
+    if cfg["source_format"] == "delta":
+        # Delta-table-as-source: stream a Bronze (or any Delta) table. file_path holds the
+        # FQ table name. No cloudFiles options apply (a delta reader rejects them); none are
+        # passed because build_format_options is skipped for delta sources upstream.
+        df = spark.readStream.format("delta").table(cfg["full_path"])
+    else:
+        checkpoint_path = f"{CHECKPOINT_ROOT}/{cfg['operation_id']}"
+        options["cloudFiles.schemaLocation"] = f"{checkpoint_path}/schema"
 
-    reader = spark.readStream.format("cloudFiles")
-    for key, value in options.items():
-        reader = reader.option(key, value)
+        reader = spark.readStream.format("cloudFiles")
+        for key, value in options.items():
+            reader = reader.option(key, value)
 
-    # Explicit schema wins over inference.
-    if cfg["schema"] is not None:
-        reader = reader.schema(cfg["schema"])
+        # Explicit schema wins over inference.
+        if cfg["schema"] is not None:
+            reader = reader.schema(cfg["schema"])
 
-    df = reader.load(cfg["full_path"])
+        df = reader.load(cfg["full_path"])
 
     # Faithful historical capture: land everything as string, leave typing to Silver.
     if cfg["cast_all_as_string"]:
@@ -308,7 +321,9 @@ try:
     print(f"Resolved config for '{OPERATION_ID}':")
     print(json.dumps({k: (str(v) if k == "schema" else v) for k, v in cfg.items()}, indent=2, default=str))
 
-    options = build_format_options(cfg)
+    # Format options (and file_format validation) are a cloudFiles-only concern. A delta
+    # source passes ZERO cloudFiles.* options (they would be rejected) and has no file_format.
+    options = build_format_options(cfg) if cfg["source_format"] == "cloudFiles" else {}
     df = build_reader(spark, cfg, options)
     checkpoint_path = f"{CHECKPOINT_ROOT}/{OPERATION_ID}"
 

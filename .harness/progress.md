@@ -37,6 +37,30 @@
 - **Debug nested notebooks** via one-off `databricks jobs submit` + `jobs get-run-output`.
 
 ## Lessons (newest first)
+### L3 — Streaming-source (delta-as-source) + abfss robustness (2026-06-16)
+- **source_format column added** to `metadata.object` (`cloudFiles` default | `delta`).
+  NULL/absent is treated as `cloudFiles` so the six existing seeded sources are unchanged.
+  This is the generic discriminator the framework branches on — NOT a per-operation_id branch
+  (passes `framework_is_generic.sh`).
+- **Delta-table-as-source:** `build_reader` branches on `source_format`. For `delta` it uses
+  `spark.readStream.format('delta').table(<fq_name>)` and **reuses `file_path`** to hold the
+  FQ table name `catalog.schema.table` (chosen over a dedicated `source_table` column to keep
+  the schema slim and the abfss/else path resolution unchanged — file_path already means "where
+  to read"). `build_format_options` is SKIPPED for delta (zero cloudFiles.* options, which a
+  delta reader rejects) and file_format validation is bypassed (delta sources have no format).
+  `trigger(availableNow=True)` is preserved → the finally-block one-row-per-run audit lifecycle
+  is intact. Seeded `op_pos_bronze_stream` streams the Bronze POS table into a Bronze replica.
+- **abfss robustness:** fixed a latent `TypeError` — the abfss branch indexed
+  `s['wildcard_pattern']` directly while the else branch guarded `or ''`; a NULL wildcard on an
+  abfss source crashed. Both branches now use `s.get('wildcard_pattern') or ''`. Seeded a
+  DISABLED abfss template (`src_abfss_template` / `op_abfss_template`) documenting the admin
+  prereq (UC external location + storage credential, provisioned out-of-band; not metadata).
+- **Kafka / continuous DEFERRED — explicitly:** `foreachBatch` rules out continuous mode, and a
+  `processingTime` trigger would never terminate, breaking the finally-block audit lifecycle.
+  Only `availableNow` is supported; revisit only if a long-running sink is ever required.
+- **verify:** `bash .harness/evals/checks/framework_is_generic.sh` → PASS;
+  `databricks bundle validate -t dev` → `Validation OK!`.
+
 ### L2 — First end-to-end deploy + run loop (2026-06-14)
 - **fail → fix (4 iterations to green):**
   1. **`CREATE CATALOG` on Default Storage.** This metastore has no storage root +
