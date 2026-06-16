@@ -156,5 +156,31 @@ print(f"Loyalty history CSV -> {loyalty_dir}")
 
 # COMMAND ----------
 
+# MAGIC %md ## 7) Product catalog — header CSV full snapshot (overwrite)
+
+# COMMAND ----------
+
+product_catalog_dir = f"{RAW}/product_catalog"
+reset_dir(product_catalog_dir)
+
+product_catalog_csv = """product_id,product_name,category,unit_price,in_stock,updated_date
+P001,Organic Bananas,Produce,1.29,true,2026-06-01
+P002,Whole Milk 1 Gallon,Dairy,4.19,true,2026-06-01
+P003,Sourdough Bread,Bakery,5.49,true,2026-06-01
+P004,Free Range Eggs,Dairy,6.99,true,2026-06-01
+P005,Ground Coffee 12oz,Beverages,9.99,true,2026-06-01
+P006,Almond Butter,Pantry,8.79,false,2026-06-01
+P007,Tomato Basil Pasta Sauce,Pantry,3.49,true,2026-06-01
+P008,Chicken Breast,Meat,7.99,true,2026-06-01
+P009,Frozen Blueberries,Frozen,4.99,true,2026-06-01
+P010,Sparkling Water 12 Pack,Beverages,6.49,true,2026-06-01
+P011,Baby Spinach,Produce,3.99,true,2026-06-01
+P012,Dark Chocolate Bar,Snacks,2.79,false,2026-06-01
+"""
+write_text(f"{product_catalog_dir}/product_catalog_20260601.csv", product_catalog_csv)
+print(f"Product catalog header CSV -> {product_catalog_dir}")
+
+# COMMAND ----------
+
 print("Sample data generation complete.")
 display(dbutils.fs.ls(RAW))
