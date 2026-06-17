@@ -8,7 +8,7 @@
 # MAGIC
 # MAGIC Order of execution for a clean demo:
 # MAGIC 1. `01_setup_metadata.sql`      (catalog/schemas/volumes/tables)
-# MAGIC 2. `02_seed_metadata.sql`       (register the seven demo sources)
+# MAGIC 2. `02_seed_metadata.sql`       (register the demo sources)
 # MAGIC 3. `00_generate_sample_data`    (write raw files to the landing volume)
 # MAGIC 4. **this notebook**            (run the framework over every operation)
 
@@ -67,6 +67,7 @@ for tbl in [
     "clickstream_events",
     "loyalty_history",
     "product_catalog",
+    "store_locations",
 ]:
     fq = f"autoloader_demo.bronze.{tbl}"
     if spark.catalog.tableExists(fq):
@@ -81,7 +82,8 @@ for tbl in [
 
 # MAGIC %md
 # MAGIC ### What to point out in the demo
-# MAGIC - **One notebook, seven sources.** No per-source code — only metadata rows differ.
+# MAGIC - **One notebook, many sources.** No per-source code — only metadata rows differ.
+# MAGIC - **`store_locations`** shows the simplest onboarding path: header CSV + append metadata.
 # MAGIC - **`loyalty_history`** landed 2018 (numeric tier) and 2024 (string tier) together,
 # MAGIC   all columns as STRING. No failure, no mixed-partition mess.
 # MAGIC - **`crm_customers`** merged on `customer_id` — C002 updated in place, C003 inserted.

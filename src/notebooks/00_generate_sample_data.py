@@ -182,5 +182,33 @@ print(f"Product catalog header CSV -> {product_catalog_dir}")
 
 # COMMAND ----------
 
+# MAGIC %md ## 8) Store locations — header CSV append reference feed
+
+# COMMAND ----------
+
+def generate_store_locations():
+    store_locations_dir = f"{RAW}/store_locations"
+    reset_dir(store_locations_dir)
+
+    store_locations_csv = """store_id,store_name,city,region,country,opened_date
+S001,Maple Market Toronto,Toronto,Ontario,Canada,2018-04-12
+S002,Granville Fresh Vancouver,Vancouver,British Columbia,Canada,2019-07-23
+S003,Old Port Grocery Montreal,Montreal,Quebec,Canada,2020-02-14
+S004,Exchange District Foods,Winnipeg,Manitoba,Canada,2021-05-03
+S005,South Congress Market,Austin,Texas,United States,2022-09-18
+S006,Capitol Hill Grocer,Seattle,Washington,United States,2017-11-06
+S007,River North Pantry,Chicago,Illinois,United States,2016-03-29
+S008,Back Bay Market,Boston,Massachusetts,United States,2023-01-15
+S009,Pearl District Foods,Portland,Oregon,United States,2024-06-10
+S010,Coconut Grove Grocer,Miami,Florida,United States,2025-08-21
+"""
+    write_text(f"{store_locations_dir}/store_locations_20260601.csv", store_locations_csv)
+    print(f"Store locations header CSV -> {store_locations_dir}")
+
+
+generate_store_locations()
+
+# COMMAND ----------
+
 print("Sample data generation complete.")
 display(dbutils.fs.ls(RAW))
