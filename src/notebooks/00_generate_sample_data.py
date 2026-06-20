@@ -142,6 +142,11 @@ print(f"Clickstream JSONL -> {click_dir}")
 # MAGIC %md ## 6) Loyalty history — CSV with multi-year schema drift (cast_all_as_string)
 # MAGIC `customer_tier` is numeric in 2018 and a string in 2024. With `cast_all_as_string`
 # MAGIC both files land without a type conflict — the Sunday-morning incident, prevented.
+# MAGIC
+# MAGIC The 2025 batch adds new customers **and** a brand-new trailing `region` column.
+# MAGIC Because `op_loyalty_history` runs `schema_evolution_mode=rescue`, the unexpected
+# MAGIC column is captured in `_rescued_data` rather than failing the stream — proof that
+# MAGIC Bronze survives column drift, not just type drift.
 
 # COMMAND ----------
 
@@ -150,8 +155,16 @@ reset_dir(loyalty_dir)
 
 loyalty_2018 = "customer_id,customer_tier,points,updated_at\nC001,1,150,2018-03-01\nC002,2,420,2018-03-01\n"
 loyalty_2024 = "customer_id,customer_tier,points,updated_at\nC001,Bronze,1500,2024-09-01\nC003,Gold,9800,2024-09-01\n"
+# 2025: new customers + an extra trailing `region` column (schema drift -> _rescued_data under rescue mode)
+loyalty_2025 = (
+    "customer_id,customer_tier,points,updated_at,region\n"
+    "C004,Platinum,15200,2025-02-14,LATAM\n"
+    "C005,Silver,300,2025-05-20,NAM\n"
+    "C006,Gold,8800,2025-06-15,EMEA\n"
+)
 write_text(f"{loyalty_dir}/loyalty_2018.csv", loyalty_2018)
 write_text(f"{loyalty_dir}/loyalty_2024.csv", loyalty_2024)
+write_text(f"{loyalty_dir}/loyalty_2025.csv", loyalty_2025)
 print(f"Loyalty history CSV -> {loyalty_dir}")
 
 # COMMAND ----------
