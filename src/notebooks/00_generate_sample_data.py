@@ -3,7 +3,8 @@
 # MAGIC # Generate Sample Source Data
 # MAGIC
 # MAGIC Writes one batch of realistic retail files into the landing volume
-# MAGIC `autoloader_demo.landing.raw`, one folder per source. Re-running clears and
+# MAGIC `${catalog}.landing.raw` (catalog from the `catalog` widget/job parameter, default
+# MAGIC `autoloader_console`), one folder per source. Re-running clears and
 # MAGIC regenerates the files (Auto Loader checkpoints still guarantee exactly-once on
 # MAGIC the ingestion side).
 # MAGIC
@@ -17,7 +18,12 @@ import shutil
 
 from pyspark.sql import Row
 
-RAW = "/Volumes/autoloader_demo/landing/raw"
+# Catalog is the single configurable value; driven by the `catalog` job parameter
+# (bundle variable `var.catalog`, default `autoloader_console`).
+dbutils.widgets.text("catalog", "autoloader_console", "UC catalog")  # noqa: F821
+CATALOG = dbutils.widgets.get("catalog").strip()  # noqa: F821
+
+RAW = f"/Volumes/{CATALOG}/landing/raw"
 
 
 def reset_dir(path: str):

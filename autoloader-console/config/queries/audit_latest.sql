@@ -13,7 +13,7 @@ FROM (
     rows_written,
     duration_ms,
     ROW_NUMBER() OVER (PARTITION BY operation_id ORDER BY run_ts DESC) AS rn
-  FROM autoloader_demo.metadata.ingestion_audit_log
+  FROM autoloader_console.metadata.ingestion_audit_log
 )
 WHERE rn = 1
 ORDER BY operation_id

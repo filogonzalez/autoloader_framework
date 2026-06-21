@@ -10,5 +10,5 @@ SELECT
   CAST(0 AS BIGINT)       AS duration_ms,
   CAST(0 AS BIGINT)       AS rows_written,
   CAST(0 AS BIGINT)       AS rescued_rows
-FROM autoloader_demo.metadata.ingestion_audit_log
+FROM autoloader_console.metadata.ingestion_audit_log
 WHERE 1 = 0

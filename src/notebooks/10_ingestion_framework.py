@@ -32,9 +32,9 @@ spark = SparkSession.builder.getOrCreate()
 # COMMAND ----------
 
 dbutils.widgets.text("operation_id", "", "Operation ID")
-dbutils.widgets.text("metadata_catalog", "autoloader_demo", "Metadata catalog")
+dbutils.widgets.text("metadata_catalog", "autoloader_console", "Metadata catalog")
 dbutils.widgets.text("metadata_schema", "metadata", "Metadata schema")
-dbutils.widgets.text("checkpoint_root", "/Volumes/autoloader_demo/landing/checkpoints", "Checkpoint root")
+dbutils.widgets.text("checkpoint_root", "/Volumes/autoloader_console/landing/checkpoints", "Checkpoint root")
 
 OPERATION_ID = dbutils.widgets.get("operation_id").strip()
 META = f"{dbutils.widgets.get('metadata_catalog').strip()}.{dbutils.widgets.get('metadata_schema').strip()}"

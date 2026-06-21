@@ -25,6 +25,8 @@ import {
   EVOLUTION_MODES,
   FILE_FORMATS,
   LOAD_TYPES,
+  UC_CATALOG,
+  DEFAULT_VOLUME_ROOT,
   createSource,
   updateSource,
   type SourceBundle,
@@ -93,7 +95,7 @@ function emptyForm(): FormState {
     use_schema: false,
     schema_cols: [{ name: '', type: 'string', nullable: true }],
     target_object_id: '',
-    target_catalog: 'autoloader_demo',
+    target_catalog: UC_CATALOG,
     target_schema: 'bronze',
     target_table: '',
     table_path: '',
@@ -154,7 +156,7 @@ function fromBundle(b: SourceBundle): FormState {
     use_schema: Boolean(b.source.object_schema),
     schema_cols: parseSchemaCols(b.source.object_schema),
     target_object_id: b.target.object_id,
-    target_catalog: b.target.target_catalog ?? 'autoloader_demo',
+    target_catalog: b.target.target_catalog ?? UC_CATALOG,
     target_schema: b.target.target_schema ?? 'bronze',
     target_table: b.target.target_table ?? '',
     table_path: b.target.table_path ?? '',
@@ -346,7 +348,7 @@ export function SourceWizard({ open, onOpenChange, initial, onSaved }: Props) {
             <Field label="File path" error={issueFor('source.file_path')}>
               <Input
                 value={form.file_path}
-                placeholder="/Volumes/autoloader_demo/landing/raw/returns/"
+                placeholder={`${DEFAULT_VOLUME_ROOT}/returns/`}
                 onChange={(e) => set('file_path', e.target.value)}
               />
             </Field>

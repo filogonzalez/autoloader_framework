@@ -8,5 +8,5 @@ SELECT
   CAST(0 AS BIGINT)    AS success,
   CAST(0 AS BIGINT)    AS warn,
   CAST(0 AS BIGINT)    AS fail
-FROM autoloader_demo.metadata.ingestion_audit_log
+FROM autoloader_console.metadata.ingestion_audit_log
 WHERE 1 = 0

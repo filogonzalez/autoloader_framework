@@ -59,6 +59,13 @@ export const FILE_FORMATS = ['csv', 'json', 'jsonl', 'parquet', 'avro', 'xml'];
 export const LOAD_TYPES = ['append', 'merge', 'overwrite'];
 export const EVOLUTION_MODES = ['addNewColumns', 'rescue', 'failOnNewColumns', 'none'];
 
+// Default UC (Delta) catalog for new-source form defaults + landing-path hints. Baked at
+// build time from VITE_UC_CATALOG (wired from UC_CATALOG in client/vite.config.ts),
+// defaulting to autoloader_console. The wizard fields remain user-editable.
+export const UC_CATALOG: string =
+  (import.meta.env.VITE_UC_CATALOG as string | undefined)?.trim() || 'autoloader_console';
+export const DEFAULT_VOLUME_ROOT = `/Volumes/${UC_CATALOG}/landing/raw`;
+
 export interface ValidationIssue {
   path: (string | number)[];
   message: string;

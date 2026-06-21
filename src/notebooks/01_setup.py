@@ -14,6 +14,13 @@
 
 import os
 
+# Catalog is the single configurable value that retargets the whole setup. Driven by the
+# `catalog` job parameter (bundle variable `var.catalog`, default `autoloader_console`).
+# A standalone notebook run picks up the widget default below.
+dbutils.widgets.text("catalog", "autoloader_console", "UC catalog")  # noqa: F821
+CATALOG = dbutils.widgets.get("catalog").strip()  # noqa: F821
+print(f"Target catalog: {CATALOG}")
+
 
 def find_sql_dir() -> str:
     """Locate src/sql relative to this notebook's deployed location."""
@@ -71,6 +78,9 @@ def run_sql_file(filename: str):
     path = f"{SQL_DIR}/{filename}"
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
+    # Substitute the catalog placeholder before splitting — keeps the .sql files as the
+    # single source of truth while letting one variable retarget the whole setup.
+    text = text.replace("${catalog}", CATALOG)
     statements = split_statements(text)
     print(f"\n=== {filename}: {len(statements)} statements ===")
     for i, stmt in enumerate(statements, 1):
@@ -98,7 +108,7 @@ run_sql_file("01_setup_metadata.sql")
 # information_schema and add the column only when absent — safe on fresh and existing tables.
 def ensure_source_format_column():
     present = spark.sql(  # noqa: F821
-        "SELECT count(*) AS n FROM autoloader_demo.information_schema.columns "
+        f"SELECT count(*) AS n FROM {CATALOG}.information_schema.columns "
         "WHERE table_schema = 'metadata' AND table_name = 'object' "
         "AND column_name = 'source_format'"
     ).collect()[0]["n"]
@@ -106,7 +116,7 @@ def ensure_source_format_column():
         print("migration: metadata.object.source_format already present — no-op")
         return
     spark.sql(  # noqa: F821
-        "ALTER TABLE autoloader_demo.metadata.object ADD COLUMNS ("
+        f"ALTER TABLE {CATALOG}.metadata.object ADD COLUMNS ("
         "source_format STRING COMMENT 'Streaming source type: cloudFiles (Auto Loader "
         "over files; default when NULL) | delta (read a Delta TABLE as a stream). For "
         "delta, file_path holds the FQ table name catalog.schema.table')"
@@ -127,11 +137,11 @@ run_sql_file("02_seed_metadata.sql")
 
 # COMMAND ----------
 
-for t in spark.sql("SHOW TABLES IN autoloader_demo.bronze").collect():  # noqa: F821
-    spark.sql(f"DROP TABLE IF EXISTS autoloader_demo.bronze.{t['tableName']}")  # noqa: F821
+for t in spark.sql(f"SHOW TABLES IN {CATALOG}.bronze").collect():  # noqa: F821
+    spark.sql(f"DROP TABLE IF EXISTS {CATALOG}.bronze.{t['tableName']}")  # noqa: F821
     print(f"dropped bronze.{t['tableName']}")
 
-ckpt = "/Volumes/autoloader_demo/landing/checkpoints"
+ckpt = f"/Volumes/{CATALOG}/landing/checkpoints"
 try:
     for f in dbutils.fs.ls(ckpt):  # noqa: F821
         dbutils.fs.rm(f.path, True)  # noqa: F821
@@ -142,9 +152,9 @@ except Exception as e:  # noqa: BLE001
 # COMMAND ----------
 
 print("Object registry:")
-spark.sql("SELECT object_id, object_type, file_format, target_table FROM autoloader_demo.metadata.object ORDER BY object_type, object_id").show(truncate=False)  # noqa: F821
+spark.sql(f"SELECT object_id, object_type, file_format, target_table FROM {CATALOG}.metadata.object ORDER BY object_type, object_id").show(truncate=False)  # noqa: F821
 print("Operations:")
-spark.sql("SELECT operation_id, source_object_id, load_type, cast_all_as_string, explode_key FROM autoloader_demo.metadata.operation ORDER BY operation_id").show(truncate=False)  # noqa: F821
+spark.sql(f"SELECT operation_id, source_object_id, load_type, cast_all_as_string, explode_key FROM {CATALOG}.metadata.operation ORDER BY operation_id").show(truncate=False)  # noqa: F821
 
 # COMMAND ----------
 

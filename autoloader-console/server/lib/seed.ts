@@ -1,4 +1,9 @@
 import type { SourceBundle } from './types';
+import { UC_CATALOG } from './config';
+
+// Landing-volume root + target catalog default to the configured UC catalog
+// (env UC_CATALOG, default `autoloader_console`). Mirrors src/sql/02_seed_metadata.sql.
+const RAW_VOLUME = `/Volumes/${UC_CATALOG}/landing/raw`;
 
 const ACME_SCHEMA =
   '{"type":"struct","fields":[' +
@@ -20,7 +25,7 @@ export const SEED_SOURCES: SourceBundle[] = [
       object_id: 'src_pos_transactions',
       storage_account: null,
       container: null,
-      file_path: '/Volumes/autoloader_demo/landing/raw/pos/transactions/',
+      file_path: `${RAW_VOLUME}/pos/transactions/`,
       wildcard_pattern: '*.parquet',
       file_format: 'parquet',
       row_tag: null,
@@ -32,7 +37,7 @@ export const SEED_SOURCES: SourceBundle[] = [
     },
     target: {
       object_id: 'tgt_pos_transactions',
-      target_catalog: 'autoloader_demo',
+      target_catalog: UC_CATALOG,
       target_schema: 'bronze',
       target_table: 'pos_transactions',
       table_path: null,
@@ -61,7 +66,7 @@ export const SEED_SOURCES: SourceBundle[] = [
       object_id: 'src_supplier_acme',
       storage_account: null,
       container: null,
-      file_path: '/Volumes/autoloader_demo/landing/raw/suppliers/acme/',
+      file_path: `${RAW_VOLUME}/suppliers/acme/`,
       wildcard_pattern: '*.csv',
       file_format: 'csv',
       row_tag: null,
@@ -73,7 +78,7 @@ export const SEED_SOURCES: SourceBundle[] = [
     },
     target: {
       object_id: 'tgt_supplier_acme',
-      target_catalog: 'autoloader_demo',
+      target_catalog: UC_CATALOG,
       target_schema: 'bronze',
       target_table: 'supplier_acme_inventory',
       table_path: null,
@@ -102,7 +107,7 @@ export const SEED_SOURCES: SourceBundle[] = [
       object_id: 'src_crm_customers',
       storage_account: null,
       container: null,
-      file_path: '/Volumes/autoloader_demo/landing/raw/crm/customers/',
+      file_path: `${RAW_VOLUME}/crm/customers/`,
       wildcard_pattern: '*.json',
       file_format: 'json',
       row_tag: null,
@@ -114,7 +119,7 @@ export const SEED_SOURCES: SourceBundle[] = [
     },
     target: {
       object_id: 'tgt_crm_customers',
-      target_catalog: 'autoloader_demo',
+      target_catalog: UC_CATALOG,
       target_schema: 'bronze',
       target_table: 'crm_customers',
       table_path: null,
@@ -143,7 +148,7 @@ export const SEED_SOURCES: SourceBundle[] = [
       object_id: 'src_supplier_edi',
       storage_account: null,
       container: null,
-      file_path: '/Volumes/autoloader_demo/landing/raw/suppliers/edi/',
+      file_path: `${RAW_VOLUME}/suppliers/edi/`,
       wildcard_pattern: '*.xml',
       file_format: 'xml',
       row_tag: 'Order',
@@ -155,7 +160,7 @@ export const SEED_SOURCES: SourceBundle[] = [
     },
     target: {
       object_id: 'tgt_supplier_edi',
-      target_catalog: 'autoloader_demo',
+      target_catalog: UC_CATALOG,
       target_schema: 'bronze',
       target_table: 'supplier_edi_orders',
       table_path: null,
@@ -184,7 +189,7 @@ export const SEED_SOURCES: SourceBundle[] = [
       object_id: 'src_clickstream',
       storage_account: null,
       container: null,
-      file_path: '/Volumes/autoloader_demo/landing/raw/clickstream/events/',
+      file_path: `${RAW_VOLUME}/clickstream/events/`,
       wildcard_pattern: '*.jsonl',
       file_format: 'jsonl',
       row_tag: null,
@@ -196,7 +201,7 @@ export const SEED_SOURCES: SourceBundle[] = [
     },
     target: {
       object_id: 'tgt_clickstream',
-      target_catalog: 'autoloader_demo',
+      target_catalog: UC_CATALOG,
       target_schema: 'bronze',
       target_table: 'clickstream_events',
       table_path: null,
@@ -225,7 +230,7 @@ export const SEED_SOURCES: SourceBundle[] = [
       object_id: 'src_loyalty_history',
       storage_account: null,
       container: null,
-      file_path: '/Volumes/autoloader_demo/landing/raw/crm/loyalty_history/',
+      file_path: `${RAW_VOLUME}/crm/loyalty_history/`,
       wildcard_pattern: '*.csv',
       file_format: 'csv',
       row_tag: null,
@@ -238,7 +243,7 @@ export const SEED_SOURCES: SourceBundle[] = [
     },
     target: {
       object_id: 'tgt_loyalty_history',
-      target_catalog: 'autoloader_demo',
+      target_catalog: UC_CATALOG,
       target_schema: 'bronze',
       target_table: 'loyalty_history',
       table_path: null,
