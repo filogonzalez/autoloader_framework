@@ -172,6 +172,8 @@ env). This is **THE supported way to retarget the catalog** (default `autoloader
 > the runtime env only and leaves the already-built SQL/client baked at the previous catalog,
 > causing build↔runtime divergence. To change only the default, edit `variables.uc_catalog.default`
 > in `databricks.yml` (the build resolver and the runtime env both read it) and re-run `npm run deploy`.
+> `npm run deploy` rejects a pass-through `--var=uc_catalog=...` for the same reason — set the
+> catalog via `--catalog=NAME` (or `UC_CATALOG` / the default), which feeds build and runtime together.
 
 ### 4. Run
 

@@ -27,6 +27,26 @@ const catalogArg = argv.find((a) => a.startsWith('--catalog='))?.slice('--catalo
 // Everything else passes through to `databricks bundle deploy` (targets, profiles, ...).
 const passthrough = argv.filter((a) => a !== '--dry-run' && !a.startsWith('--catalog='));
 
+// Reject a pass-through --var that sets the catalog: this wrapper alone owns
+// `--var=uc_catalog=<resolved>`. A user-supplied one would let the build bake one catalog
+// while runtime gets another (divergence) through the supported entrypoint. Tolerate `=`/space
+// forms and surrounding quotes. The catalog must come from --catalog / UC_CATALOG / the default.
+const unquote = (s) => s.replace(/^['"]|['"]$/g, '');
+const isCatalogVarSpec = (spec) => /^\s*uc_catalog\s*=/.test(unquote(spec));
+for (let i = 0; i < passthrough.length; i++) {
+  const tok = unquote(passthrough[i]);
+  const spec =
+    tok === '--var' ? unquote(passthrough[i + 1] ?? '') : tok.startsWith('--var=') ? tok.slice(6) : null;
+  if (spec !== null && isCatalogVarSpec(spec)) {
+    console.error(
+      "[deploy] refusing a pass-through --var for `uc_catalog`: that would bake one catalog at\n" +
+        "         build time and deploy another at runtime (divergence). Set the catalog ONCE via\n" +
+        "         `--catalog=NAME`, the `UC_CATALOG` env, or the databricks.yml var.uc_catalog default.",
+    );
+    process.exit(2);
+  }
+}
+
 // ONE input. An explicit --catalog wins; otherwise resolveUcCatalog() (UC_CATALOG env, else
 // the databricks.yml var.uc_catalog default) — the exact value the build resolver will bake.
 const catalog = catalogArg ? validateCatalog(catalogArg, '--catalog') : resolveUcCatalog();
