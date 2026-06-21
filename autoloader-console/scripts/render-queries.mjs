@@ -4,18 +4,20 @@
 // generator runs DESCRIBE QUERY against the warehouse — so the catalog must be a
 // real LITERAL in the SQL (a parameterized identifier would break type inference).
 // To keep the catalog configurable from the single shared value, this idempotent
-// step rewrites the catalog segment of the known framework tables to UC_CATALOG
-// (default `autoloader_console`, matching server/lib/config.ts).
+// step rewrites the catalog segment of the known framework tables to the catalog
+// resolved by scripts/uc-catalog.mjs (the SAME `var.uc_catalog` that wires the app's
+// runtime UC_CATALOG env — build and runtime cannot diverge).
 //
-// Runs in `prebuild`/`predev` before typegen. With the default env it is a no-op on
-// a fresh checkout (the committed queries already carry the default catalog).
+// Runs in `prebuild`/`predev` before typegen. With the default it is a no-op on a fresh
+// checkout (the committed queries already carry the default catalog).
 //
 //   UC_CATALOG=my_catalog node scripts/render-queries.mjs
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveUcCatalog } from './uc-catalog.mjs';
 
-const CATALOG = (process.env.UC_CATALOG ?? '').trim() || 'autoloader_console';
+const CATALOG = resolveUcCatalog();
 const QUERIES_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'config', 'queries');
 
 // Catalog prefix immediately before a known framework table reference.

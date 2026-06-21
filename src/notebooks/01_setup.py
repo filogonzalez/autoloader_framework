@@ -13,12 +13,17 @@
 # COMMAND ----------
 
 import os
+import re
 
 # Catalog is the single configurable value that retargets the whole setup. Driven by the
 # `catalog` job parameter (bundle variable `var.catalog`, default `autoloader_console`).
 # A standalone notebook run picks up the widget default below.
 dbutils.widgets.text("catalog", "autoloader_console", "UC catalog")  # noqa: F821
 CATALOG = dbutils.widgets.get("catalog").strip()  # noqa: F821
+# Fail fast on an empty / non-identifier catalog so the ${catalog} substitution below never
+# produces invalid SQL (e.g. `CREATE CATALOG IF NOT EXISTS ` or `/Volumes//landing/...`).
+if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", CATALOG):
+    raise ValueError(f"Invalid catalog '{CATALOG}' — expected an identifier [A-Za-z_][A-Za-z0-9_]*")
 print(f"Target catalog: {CATALOG}")
 
 

@@ -17,13 +17,13 @@
 from pyspark.sql import functions as F
 
 # Catalog is the single configurable value; driven by the `catalog` job parameter
-# (bundle variable `var.catalog`, default `autoloader_console`). Forwarded to the
-# framework notebook below so reads/writes/checkpoints all land under this catalog.
+# (bundle variable `var.catalog`, default `autoloader_console`). Forwarded verbatim to the
+# framework notebook below, which derives its metadata_catalog + checkpoint_root from it —
+# so one `catalog` retargets reads, writes and checkpoints across all notebooks.
 dbutils.widgets.text("catalog", "autoloader_console", "UC catalog")  # noqa: F821
 CATALOG = dbutils.widgets.get("catalog").strip()  # noqa: F821
 
 META = f"{CATALOG}.metadata"
-CHECKPOINT_ROOT = f"/Volumes/{CATALOG}/landing/checkpoints"
 FRAMEWORK_NOTEBOOK = "10_ingestion_framework"
 
 # COMMAND ----------
@@ -45,7 +45,7 @@ for op in operations:
         out = dbutils.notebook.run(
             FRAMEWORK_NOTEBOOK,
             0,
-            {"operation_id": op, "metadata_catalog": CATALOG, "checkpoint_root": CHECKPOINT_ROOT},
+            {"operation_id": op, "catalog": CATALOG},
         )
         print(out)
         results[op] = json.loads(out) if out.strip().startswith("{") else {"status": "SUCCESS", "raw": out}

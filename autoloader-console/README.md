@@ -152,11 +152,28 @@ databricks bundle validate
 
 ### 3. Deploy
 
-Deploy to the default target:
+Deploy with the single entrypoint, which builds and deploys from **one** catalog input so the
+build-baked artifacts (rendered analytics SQL + the client's `VITE_UC_CATALOG`) and the deployed
+runtime `UC_CATALOG` env can never target different catalogs:
 
 ```bash
-databricks bundle deploy
+npm run deploy                              # default catalog (autoloader_console)
+npm run deploy -- --catalog=my_catalog      # retarget BUILD + RUNTIME together
+UC_CATALOG=my_catalog npm run deploy        # same, via env
+npm run deploy -- --dry-run --catalog=...   # print the plan; build/deploy nothing
+npm run deploy -- -t prod                   # extra args pass through to bundle deploy
 ```
+
+It exports the catalog as `UC_CATALOG` for `npm run build` (so `render-queries` + Vite bake it)
+and passes the same value to `databricks bundle deploy --var=uc_catalog=<catalog>` (the runtime
+env). This is **THE supported way to retarget the catalog** (default `autoloader_console`).
+
+> **Do not** retarget with a bare `databricks bundle deploy --var=uc_catalog=...`: that changes
+> the runtime env only and leaves the already-built SQL/client baked at the previous catalog,
+> causing build↔runtime divergence. To change only the default, edit `variables.uc_catalog.default`
+> in `databricks.yml` (the build resolver and the runtime env both read it) and re-run `npm run deploy`.
+> `npm run deploy` rejects a pass-through `--var=uc_catalog=...` for the same reason — set the
+> catalog via `--catalog=NAME` (or `UC_CATALOG` / the default), which feeds build and runtime together.
 
 ### 4. Run
 
@@ -169,10 +186,10 @@ databricks bundle run <APP_NAME> -t dev
 ### Deploy to Production
 
 1. Configure the production target in `databricks.yml`
-2. Deploy to production:
+2. Deploy to production (same single-input entrypoint):
 
 ```bash
-databricks bundle deploy -t prod
+npm run deploy -- -t prod
 ```
 
 ## Project Structure
@@ -187,8 +204,8 @@ databricks bundle deploy -t prod
 * shared/          # Shared types
 * config/          # Configuration
   * queries/       # SQL query files
-* databricks.yml   # Bundle configuration
-* app.yaml         # App configuration
+* scripts/         # Build tooling (uc-catalog resolver, query render)
+* databricks.yml   # Bundle config + app runtime config (command/env, incl. UC_CATALOG)
 * .env.example     # Environment variables example
 ```
 

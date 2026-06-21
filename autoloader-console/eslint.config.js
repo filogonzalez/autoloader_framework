@@ -18,6 +18,8 @@ export default tseslint.config(
       '**.databricks/**',
       'tests/**',
       '**/.smoke-test/**',
+      // Node build tooling (plain ESM, outside any tsconfig) — not type-checked-linted.
+      'scripts/**',
     ],
   },
 
