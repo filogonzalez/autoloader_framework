@@ -17,7 +17,7 @@ export function useCurrentUser(): CurrentUserContextValue {
   return ctx;
 }
 
-/** Initials for an avatar: "Diego Morales" → "DM"; "diego" → "DI"; empty → "?". */
+/** Avatar initials: first letters of the first two words, uppercased (one word → its first two letters; empty → "?"). */
 export function initials(name: string | null | undefined): string {
   const trimmed = (name ?? '').trim();
   if (!trimmed) return '?';

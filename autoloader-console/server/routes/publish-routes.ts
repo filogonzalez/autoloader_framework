@@ -64,7 +64,9 @@ class MissingUserTokenError extends Error {
  * (mirrors AppKit's own documented OBO dev fallback).
  */
 function userWorkspaceClient(req: Request): WorkspaceClient {
-  const token = req.header('x-forwarded-access-token');
+  // Trim so a blank / whitespace-only header is treated as ABSENT (→ clear 401),
+  // not as a present-but-invalid token that would only fail later as a 500.
+  const token = req.header('x-forwarded-access-token')?.trim();
   const host = process.env.DATABRICKS_HOST;
   if (token) {
     if (!host) throw new Error('DATABRICKS_HOST is not set');
