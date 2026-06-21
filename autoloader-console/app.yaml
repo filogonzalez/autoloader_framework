@@ -1,0 +1,10 @@
+command: ['npm', 'run', 'start']
+env:
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: LAKEBASE_ENDPOINT
+    valueFrom: postgres
+  # Isolated metadata schema for the Console. Keeps the Console off the live
+  # `metadata` schema used by the autoloader-sources app (shared Lakebase instance).
+  - name: METADATA_SCHEMA
+    value: metadata_console
