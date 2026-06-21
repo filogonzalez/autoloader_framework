@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC # Run the Demo
 # MAGIC
-# MAGIC Iterates over every enabled operation in `autoloader_demo.metadata.operation` and
+# MAGIC Iterates over every enabled operation in `<catalog>.metadata.operation` and
 # MAGIC invokes the framework notebook (`10_ingestion_framework`) once per operation — the
 # MAGIC same way a Lakeflow Job scheduler would, one task per `operation_id`.
 # MAGIC
@@ -16,7 +16,14 @@
 
 from pyspark.sql import functions as F
 
-META = "autoloader_demo.metadata"
+# Catalog is the single configurable value; driven by the `catalog` job parameter
+# (bundle variable `var.catalog`, default `autoloader_console`). Forwarded verbatim to the
+# framework notebook below, which derives its metadata_catalog + checkpoint_root from it —
+# so one `catalog` retargets reads, writes and checkpoints across all notebooks.
+dbutils.widgets.text("catalog", "autoloader_console", "UC catalog")  # noqa: F821
+CATALOG = dbutils.widgets.get("catalog").strip()  # noqa: F821
+
+META = f"{CATALOG}.metadata"
 FRAMEWORK_NOTEBOOK = "10_ingestion_framework"
 
 # COMMAND ----------
@@ -101,7 +108,11 @@ results = {}
 for op in operations:
     print(f"\n=== Running {op} ===")
     try:
-        out = dbutils.notebook.run(FRAMEWORK_NOTEBOOK, 0, {"operation_id": op})
+        out = dbutils.notebook.run(
+            FRAMEWORK_NOTEBOOK,
+            0,
+            {"operation_id": op, "catalog": CATALOG},
+        )
         print(out)
         results[op] = json.loads(out) if out.strip().startswith("{") else {"status": "SUCCESS", "raw": out}
     except Exception as e:  # noqa: BLE001
@@ -135,7 +146,7 @@ for tbl in [
     "product_catalog",
     "store_locations",
 ]:
-    fq = f"autoloader_demo.bronze.{tbl}"
+    fq = f"{CATALOG}.bronze.{tbl}"
     if spark.catalog.tableExists(fq):
         cnt = spark.table(fq).count()
         table_counts[tbl] = cnt

@@ -1,0 +1,78 @@
+bundle:
+  name: autoloader-console
+
+variables:
+  app_name:
+    description: Deployed Databricks App name
+    default: autoloader-console
+  uc_catalog:
+    description: >-
+      SINGLE SOURCE OF TRUTH for the app's Unity Catalog (Delta) catalog — the catalog the
+      Console publishes into and reads Bronze/audit analytics from (`<catalog>.metadata.*`,
+      `<catalog>.bronze.*`, `<catalog>.information_schema.*`). Default `autoloader_console`.
+      Drives BOTH layers from this one value: (1) the deployed app's runtime `UC_CATALOG`
+      env is wired from `${var.uc_catalog}` in resources.apps.app.config.env below; (2) the
+      build-time render (scripts/render-queries.mjs) and client (VITE_UC_CATALOG) derive from
+      this same variable via scripts/uc-catalog.mjs. NOTE: this is the UC catalog, a DIFFERENT
+      layer from the Lakebase Postgres `metadata_console` schema (env METADATA_SCHEMA).
+    default: autoloader_console
+  sql_warehouse_id:
+    description: SQL Warehouse ID
+  postgres_branch:
+    description: Full Lakebase Postgres branch resource name. Obtain by running `databricks postgres list-branches {project-name}`, select the desired item from the output array and use its .name value. Requires the project resource name.
+  postgres_database:
+    description: Full Lakebase Postgres database resource name. Obtain by running `databricks postgres list-databases {branch-name}`, select the desired item from the output array and use its .name value. Requires the branch resource name.
+  postgres_project:
+    description: Full Lakebase Postgres project resource name. Obtain by running `databricks postgres list-projects`, select the desired item from the output array and use its .name value.
+
+resources:
+  apps:
+    app:
+      name: ${var.app_name}
+      description: "Autoloader Console — Overview, Operations, Detail, Onboarding & Observability for the metadata-driven Auto Loader framework"
+      source_code_path: ./
+      # App runtime config (command + env) lives here in the bundle — NOT in a static
+      # app.yaml — so the deployed app's UC_CATALOG env is wired from ${var.uc_catalog}
+      # (the single source of truth). app.yaml was removed to avoid a second, divergent
+      # source for the catalog. Local dev reads env from .env, not from this block.
+      config:
+        command: ["npm", "run", "start"]
+        env:
+          - name: DATABRICKS_WAREHOUSE_ID
+            value_from: sql-warehouse
+          - name: LAKEBASE_ENDPOINT
+            value_from: postgres
+          # LAYER: Lakebase Postgres (NOT Unity Catalog). Isolated Console schema; keeps
+          # the Console off the live `metadata` schema on the shared Lakebase instance.
+          - name: METADATA_SCHEMA
+            value: metadata_console
+          # LAYER: Unity Catalog (Delta). Wired from the single source `var.uc_catalog`.
+          - name: UC_CATALOG
+            value: ${var.uc_catalog}
+      # Uncomment to enable on behalf of user API scopes. Available scopes: sql, dashboards.genie, files.files, serving.serving-endpoints
+      # user_api_scopes:
+      #   - sql
+
+      # The resources which this app has access to.
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.sql_warehouse_id}
+            permission: CAN_USE
+        - name: postgres
+          postgres:
+            branch: ${var.postgres_branch}
+            database: ${var.postgres_database}
+            permission: CAN_CONNECT_AND_CREATE
+
+targets:
+  default:
+    default: true
+    workspace:
+      host: https://adb-7405612437610096.16.azuredatabricks.net
+
+    variables:
+      sql_warehouse_id: a731a35f3f8cdef6
+      postgres_branch: projects/autoloader-meta/branches/production
+      postgres_database: projects/autoloader-meta/branches/production/databases/databricks-postgres
+      postgres_project: projects/autoloader-meta

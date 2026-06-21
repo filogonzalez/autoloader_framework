@@ -5,15 +5,19 @@
 -- framework. Each is a metadata row — no per-source code exists anywhere.
 --
 -- INSERT OVERWRITE makes this script safely re-runnable (it fully replaces the rows).
--- Paths point at the UC volume autoloader_demo.landing.raw populated by
--- 00_generate_sample_data. To use ADLS instead, set storage_account/container and put
--- the abfss-relative path in file_path.
+-- Paths point at the UC volume ${catalog}.landing.raw populated by 00_generate_sample_data.
+-- To use ADLS instead, set storage_account/container and put the abfss-relative path in file_path.
+--
+-- CATALOG is parameterized: the literal `${catalog}` (in volume paths, target_catalog rows
+-- and the delta-source FQ table name) is substituted by the runner (src/notebooks/01_setup.py)
+-- from the `catalog` widget/job parameter (bundle variable `var.catalog`, default
+-- `autoloader_console`). Schema and table/source names are intentionally unchanged.
 -- =====================================================================================
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- SOURCE + TARGET objects
 -- ─────────────────────────────────────────────────────────────────────────────────────
-INSERT OVERWRITE autoloader_demo.metadata.object
+INSERT OVERWRITE ${catalog}.metadata.object
   (object_id, object_type, source_format, storage_account, container, file_path, wildcard_pattern,
    file_format, row_tag, object_schema, delimiter, encoding, null_value,
    target_catalog, target_schema, target_table, table_path, partition_cols, merge_keys,
@@ -21,14 +25,14 @@ INSERT OVERWRITE autoloader_demo.metadata.object
 VALUES
   -- 1) POS transactions — columnar Parquet, accumulating event data ──────────────────────
   ('src_pos_transactions', 'source', 'cloudFiles', NULL, NULL,
-   '/Volumes/autoloader_demo/landing/raw/pos/transactions/', '*.parquet',
+   '/Volumes/${catalog}/landing/raw/pos/transactions/', '*.parquet',
    'parquet', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'POS transaction feed from stores (Parquet, append-only events)', current_timestamp()),
 
   -- 2) Supplier ACME inventory — headerless, pipe-delimited CSV w/ explicit schema ──────
   ('src_supplier_acme', 'source', 'cloudFiles', NULL, NULL,
-   '/Volumes/autoloader_demo/landing/raw/suppliers/acme/', '*.csv',
+   '/Volumes/${catalog}/landing/raw/suppliers/acme/', '*.csv',
    'csv', NULL,
    '{"type":"struct","fields":[{"name":"supplier_id","type":"string","nullable":true,"metadata":{}},{"name":"sku","type":"string","nullable":true,"metadata":{}},{"name":"product_name","type":"string","nullable":true,"metadata":{}},{"name":"qty_on_hand","type":"integer","nullable":true,"metadata":{}},{"name":"unit_cost","type":"double","nullable":true,"metadata":{}},{"name":"last_updated","type":"string","nullable":true,"metadata":{}}]}',
    '|', 'UTF-8', 'NULL',
@@ -37,35 +41,35 @@ VALUES
 
   -- 3) CRM customers — JSON, current-state records resent over time (upsert) ─────────────
   ('src_crm_customers', 'source', 'cloudFiles', NULL, NULL,
-   '/Volumes/autoloader_demo/landing/raw/crm/customers/', '*.json',
+   '/Volumes/${catalog}/landing/raw/crm/customers/', '*.json',
    'json', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'CRM customer master extract (JSON, represents current state -> merge)', current_timestamp()),
 
   -- 4) Supplier EDI orders — XML with a row tag ─────────────────────────────────────────
   ('src_supplier_edi', 'source', 'cloudFiles', NULL, NULL,
-   '/Volumes/autoloader_demo/landing/raw/suppliers/edi/', '*.xml',
+   '/Volumes/${catalog}/landing/raw/suppliers/edi/', '*.xml',
    'xml', 'Order', NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'Supplier EDI purchase orders (XML, rowTag=Order)', current_timestamp()),
 
   -- 5) Clickstream events — JSONL with a top-level array to explode ──────────────────────
   ('src_clickstream', 'source', 'cloudFiles', NULL, NULL,
-   '/Volumes/autoloader_demo/landing/raw/clickstream/events/', '*.jsonl',
+   '/Volumes/${catalog}/landing/raw/clickstream/events/', '*.jsonl',
    'jsonl', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'Web clickstream export (JSONL, records wrapped in an events[] array)', current_timestamp()),
 
   -- 6) Loyalty history — CSV historical load with multi-year schema drift ───────────────
   ('src_loyalty_history', 'source', 'cloudFiles', NULL, NULL,
-   '/Volumes/autoloader_demo/landing/raw/crm/loyalty_history/', '*.csv',
+   '/Volumes/${catalog}/landing/raw/crm/loyalty_history/', '*.csv',
    'csv', NULL, NULL, ',', 'UTF-8', '',
    NULL, NULL, NULL, NULL, NULL, NULL,
    'Five years of loyalty history (CSV). customer_tier drifted numeric->string across years', current_timestamp()),
 
   -- 7) Product catalog — header CSV full snapshot for overwrite loads ──────────────────
   ('src_product_catalog', 'source', 'cloudFiles', NULL, NULL,
-   '/Volumes/autoloader_demo/landing/raw/product_catalog/', '*.csv',
+   '/Volumes/${catalog}/landing/raw/product_catalog/', '*.csv',
    'csv', NULL, NULL, ',', 'UTF-8', '',
    NULL, NULL, NULL, NULL, NULL, NULL,
    'Vendor product catalog full snapshot (header CSV, schema inference, overwrite target)', current_timestamp()),
@@ -81,7 +85,7 @@ VALUES
   --    Demonstrates streaming-TABLE ingestion (source_format='delta') via availableNow.
   --    file_path holds the FQ table name; storage_account/container/file_format are unused.
   ('src_pos_bronze_stream', 'source', 'delta', NULL, NULL,
-   'autoloader_demo.bronze.pos_transactions', NULL,
+   '${catalog}.bronze.pos_transactions', NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
    'Delta-table-as-source: streams the Bronze POS table as a stream (availableNow)', current_timestamp()),
@@ -100,37 +104,37 @@ VALUES
   -- ── TARGET objects (Bronze tables) ───────────────────────────────────────────────────
   ('tgt_pos_transactions', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
-   'autoloader_demo', 'bronze', 'pos_transactions', NULL, 'load_date', NULL,
+   '${catalog}', 'bronze', 'pos_transactions', NULL, 'load_date', NULL,
    'Bronze POS transactions (partitioned by load_date)', current_timestamp()),
 
   ('tgt_supplier_acme', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
-   'autoloader_demo', 'bronze', 'supplier_acme_inventory', NULL, NULL, NULL,
+   '${catalog}', 'bronze', 'supplier_acme_inventory', NULL, NULL, NULL,
    'Bronze supplier ACME inventory', current_timestamp()),
 
   ('tgt_crm_customers', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
-   'autoloader_demo', 'bronze', 'crm_customers', NULL, NULL, 'customer_id',
+   '${catalog}', 'bronze', 'crm_customers', NULL, NULL, 'customer_id',
    'Bronze CRM customers (upsert keyed on customer_id)', current_timestamp()),
 
   ('tgt_supplier_edi', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
-   'autoloader_demo', 'bronze', 'supplier_edi_orders', NULL, NULL, NULL,
+   '${catalog}', 'bronze', 'supplier_edi_orders', NULL, NULL, NULL,
    'Bronze supplier EDI orders', current_timestamp()),
 
   ('tgt_clickstream', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
-   'autoloader_demo', 'bronze', 'clickstream_events', NULL, NULL, NULL,
+   '${catalog}', 'bronze', 'clickstream_events', NULL, NULL, NULL,
    'Bronze clickstream events (one row per exploded event)', current_timestamp()),
 
   ('tgt_loyalty_history', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
-   'autoloader_demo', 'bronze', 'loyalty_history', NULL, NULL, NULL,
+   '${catalog}', 'bronze', 'loyalty_history', NULL, NULL, NULL,
    'Bronze loyalty history (faithful capture, all columns as STRING)', current_timestamp()),
 
   ('tgt_product_catalog', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
-   'autoloader_demo', 'bronze', 'product_catalog', NULL, NULL, NULL,
+   '${catalog}', 'bronze', 'product_catalog', NULL, NULL, NULL,
    'Bronze product catalog (fully replaced by each vendor snapshot)', current_timestamp()),
 
   -- NEW SOURCE EXAMPLE: target object for store_locations (Bronze append table)
@@ -142,20 +146,20 @@ VALUES
   -- Target for the Delta-table-as-source stream (new Bronze table, append load) ──────────
   ('tgt_pos_stream_replica', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
-   'autoloader_demo', 'bronze', 'pos_transactions_stream_replica', NULL, NULL, NULL,
+   '${catalog}', 'bronze', 'pos_transactions_stream_replica', NULL, NULL, NULL,
    'Bronze replica fed by streaming the POS Bronze table (Delta-as-source demo)', current_timestamp()),
 
   -- Target for the abfss template (DISABLED operation) ──────────────────────────────────
   ('tgt_abfss_template', 'target', NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL,
-   'autoloader_demo', 'bronze', 'abfss_vendor_orders', NULL, NULL, NULL,
+   '${catalog}', 'bronze', 'abfss_vendor_orders', NULL, NULL, NULL,
    'Bronze target for the abfss source template (DISABLED)', current_timestamp());
 
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- OPERATIONS — bind source -> target and declare run behavior
 -- ─────────────────────────────────────────────────────────────────────────────────────
-INSERT OVERWRITE autoloader_demo.metadata.operation
+INSERT OVERWRITE ${catalog}.metadata.operation
   (operation_id, enabled, source_object_id, target_object_id, load_type, merge_schema,
    schema_evolution_mode, cast_all_as_string, multiline, case_sensitive,
    max_files_per_trigger, explode_key, description, created_at)
