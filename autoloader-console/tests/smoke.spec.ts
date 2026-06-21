@@ -3,7 +3,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 // ── App shape (must match client/src/App.tsx + the i18n shell) ──────────────
-// Sidebar brand + breadcrumb root + the five views. Default language is Spanish
+// Sidebar brand + breadcrumb root + the six views. Default language is Spanish
 // (see client/src/i18n/LanguageProvider.tsx), so labels below are the ES strings.
 const BRAND_ALT = 'Scotiabank';
 const BREADCRUMB_ROOT = 'scotia_latam';
@@ -23,9 +23,10 @@ test('smoke test - app shell and sidebar nav render', async ({ page }) => {
   await expect(page.getByRole('img', { name: BRAND_ALT })).toBeVisible();
   await expect(page.getByText(BREADCRUMB_ROOT)).toBeVisible();
 
-  // Five-view sidebar (NAV_VIEWS via nav.ts), ES defaults.
+  // Six-view sidebar (NAV_VIEWS via nav.ts), ES defaults.
   await expect(page.getByRole('link', { name: 'Resumen' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Operaciones' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Fuentes' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Linaje' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Detalle' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Onboarding' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Observabilidad' })).toBeVisible();

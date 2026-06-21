@@ -49,9 +49,15 @@ resources:
           # LAYER: Unity Catalog (Delta). Wired from the single source `var.uc_catalog`.
           - name: UC_CATALOG
             value: ${var.uc_catalog}
-      # Uncomment to enable on behalf of user API scopes. Available scopes: sql, dashboards.genie, files.files, serving.serving-endpoints
-      # user_api_scopes:
-      #   - sql
+      # On-behalf-of-user (OBO) API scopes. `sql` lets the app exchange the
+      # per-request user token (x-forwarded-access-token) for a user-scoped
+      # Databricks SQL credential, so UC reads (analytics *.obo.sql) and the
+      # publish-to-Delta path run AS THE USER — UC grants/audit reflect the
+      # person, not the app service principal. Lakebase `metadata_console`
+      # writes intentionally stay SP-owned (the console owns its own schema).
+      # Available scopes: sql, dashboards.genie, files.files, serving.serving-endpoints
+      user_api_scopes:
+        - sql
 
       # The resources which this app has access to.
       resources:

@@ -8,10 +8,12 @@ import {
   useIsMobile,
 } from '@databricks/appkit-ui/react';
 import { LanguageProvider } from './i18n/LanguageProvider';
+import { CurrentUserProvider } from './identity/CurrentUserProvider';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { OverviewPage } from './pages/OverviewPage';
-import { OperationsPage } from './pages/OperationsPage';
+import { SourcesPage } from './pages/SourcesPage';
+import { LineagePage } from './pages/LineagePage';
 import { DetailPage } from './pages/DetailPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { ObservabilityPage } from './pages/ObservabilityPage';
@@ -54,7 +56,8 @@ const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { path: '/', element: <OverviewPage /> },
-      { path: '/operations', element: <OperationsPage /> },
+      { path: '/sources', element: <SourcesPage /> },
+      { path: '/lineage', element: <LineagePage /> },
       { path: '/detail', element: <DetailPage /> },
       { path: '/onboarding', element: <OnboardingPage /> },
       { path: '/observability', element: <ObservabilityPage /> },
@@ -65,7 +68,9 @@ const router = createBrowserRouter([
 export default function App() {
   return (
     <LanguageProvider>
-      <RouterProvider router={router} />
+      <CurrentUserProvider>
+        <RouterProvider router={router} />
+      </CurrentUserProvider>
     </LanguageProvider>
   );
 }

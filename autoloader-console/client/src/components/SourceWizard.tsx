@@ -605,7 +605,7 @@ export function SourceWizard({ open, onOpenChange, initial, onSaved }: Props) {
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={submitting}>
+          <Button onClick={() => void submit()} disabled={submitting}>
             {submitting ? 'Saving…' : isEdit ? 'Save changes' : 'Add source'}
           </Button>
         </DialogFooter>

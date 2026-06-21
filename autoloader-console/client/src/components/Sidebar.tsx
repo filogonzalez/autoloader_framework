@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router';
 import { useLanguage } from '../i18n/context';
+import { useCurrentUser, initials } from '../identity/context';
 import { NAV_VIEWS } from '../nav';
 
 function navItemClass({ isActive }: { isActive: boolean }): string {
@@ -11,9 +12,14 @@ function navItemClass({ isActive }: { isActive: boolean }): string {
   ].join(' ');
 }
 
-/** Left sidebar: Scotiabank brand, the five Console views, and a user-card placeholder. */
+/** Left sidebar: Scotiabank brand, the Console views, and the real signed-in user. */
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useLanguage();
+  const { user, loading } = useCurrentUser();
+  // Real user from /api/me (Apps identity headers). Secondary line shows the
+  // email/username — identity is not a translatable string.
+  const displayName = user?.displayName ?? (loading ? '…' : t('user.unknown'));
+  const secondary = user?.email ?? user?.username ?? '';
 
   return (
     <div className="flex h-full flex-col">
@@ -58,17 +64,17 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </nav>
 
-      {/* User card (placeholder) */}
+      {/* User card — the real signed-in user (GET /api/me) */}
       <div className="flex items-center gap-2.5 border-t px-4 py-3">
         <div
-          className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
           style={{ background: 'linear-gradient(135deg, #ec111a, #ed431d)' }}
         >
-          DM
+          {loading ? '··' : initials(user?.displayName ?? user?.username)}
         </div>
-        <div className="leading-tight">
-          <div className="text-xs font-semibold text-foreground">{t('user.name')}</div>
-          <div className="text-[10px] text-muted-foreground">{t('user.role')}</div>
+        <div className="min-w-0 leading-tight">
+          <div className="truncate text-xs font-semibold text-foreground">{displayName}</div>
+          {secondary && <div className="truncate text-[10px] text-muted-foreground">{secondary}</div>}
         </div>
       </div>
     </div>
