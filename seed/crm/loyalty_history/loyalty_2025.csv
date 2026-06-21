@@ -1,0 +1,4 @@
+customer_id,customer_tier,points,updated_at,region
+C004,Platinum,15200,2025-02-14,LATAM
+C005,Silver,300,2025-05-20,NAM
+C006,Gold,8800,2025-06-15,EMEA
