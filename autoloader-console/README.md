@@ -187,8 +187,8 @@ databricks bundle deploy -t prod
 * shared/          # Shared types
 * config/          # Configuration
   * queries/       # SQL query files
-* databricks.yml   # Bundle configuration
-* app.yaml         # App configuration
+* scripts/         # Build tooling (uc-catalog resolver, query render)
+* databricks.yml   # Bundle config + app runtime config (command/env, incl. UC_CATALOG)
 * .env.example     # Environment variables example
 ```
 

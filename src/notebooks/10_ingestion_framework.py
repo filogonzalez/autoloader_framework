@@ -31,14 +31,28 @@ spark = SparkSession.builder.getOrCreate()
 
 # COMMAND ----------
 
+import re
+
 dbutils.widgets.text("operation_id", "", "Operation ID")
-dbutils.widgets.text("metadata_catalog", "autoloader_console", "Metadata catalog")
+# `catalog` is the single retarget knob — same name + default as the other notebooks and the
+# job-level `catalog` parameter. metadata_catalog/checkpoint_root are optional overrides; left
+# blank (the default) they DERIVE from `catalog`, so a direct run of this notebook with a custom
+# catalog honors it without touching the other widgets.
+dbutils.widgets.text("catalog", "autoloader_console", "UC catalog")
+dbutils.widgets.text("metadata_catalog", "", "Metadata catalog (blank = use catalog)")
 dbutils.widgets.text("metadata_schema", "metadata", "Metadata schema")
-dbutils.widgets.text("checkpoint_root", "/Volumes/autoloader_console/landing/checkpoints", "Checkpoint root")
+dbutils.widgets.text("checkpoint_root", "", "Checkpoint root (blank = /Volumes/<catalog>/landing/checkpoints)")
 
 OPERATION_ID = dbutils.widgets.get("operation_id").strip()
-META = f"{dbutils.widgets.get('metadata_catalog').strip()}.{dbutils.widgets.get('metadata_schema').strip()}"
-CHECKPOINT_ROOT = dbutils.widgets.get("checkpoint_root").strip().rstrip("/")
+CATALOG = dbutils.widgets.get("catalog").strip() or "autoloader_console"
+# Fail fast on an empty / non-identifier catalog instead of building invalid SQL/paths.
+if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", CATALOG):
+    raise ValueError(f"Invalid catalog '{CATALOG}' — expected an identifier [A-Za-z_][A-Za-z0-9_]*")
+METADATA_CATALOG = dbutils.widgets.get("metadata_catalog").strip() or CATALOG
+META = f"{METADATA_CATALOG}.{dbutils.widgets.get('metadata_schema').strip()}"
+CHECKPOINT_ROOT = (
+    dbutils.widgets.get("checkpoint_root").strip() or f"/Volumes/{CATALOG}/landing/checkpoints"
+).rstrip("/")
 
 if not OPERATION_ID:
     raise ValueError("operation_id widget is required.")

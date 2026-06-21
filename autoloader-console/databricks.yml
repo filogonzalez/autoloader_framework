@@ -7,12 +7,14 @@ variables:
     default: autoloader-console
   uc_catalog:
     description: >-
-      Unity Catalog (Delta) catalog for the framework's DATA layer that the Console
-      publishes into and reads Bronze/audit analytics from (`<catalog>.metadata.*`,
+      SINGLE SOURCE OF TRUTH for the app's Unity Catalog (Delta) catalog — the catalog the
+      Console publishes into and reads Bronze/audit analytics from (`<catalog>.metadata.*`,
       `<catalog>.bronze.*`, `<catalog>.information_schema.*`). Default `autoloader_console`.
-      NOTE: this is the UC catalog, a DIFFERENT layer from the Lakebase Postgres
-      `metadata_console` schema (env METADATA_SCHEMA). Threaded to the app runtime via the
-      `UC_CATALOG` env in app.yaml; set the matching env at client/query build time to retarget.
+      Drives BOTH layers from this one value: (1) the deployed app's runtime `UC_CATALOG`
+      env is wired from `${var.uc_catalog}` in resources.apps.app.config.env below; (2) the
+      build-time render (scripts/render-queries.mjs) and client (VITE_UC_CATALOG) derive from
+      this same variable via scripts/uc-catalog.mjs. NOTE: this is the UC catalog, a DIFFERENT
+      layer from the Lakebase Postgres `metadata_console` schema (env METADATA_SCHEMA).
     default: autoloader_console
   sql_warehouse_id:
     description: SQL Warehouse ID
@@ -29,6 +31,24 @@ resources:
       name: ${var.app_name}
       description: "Autoloader Console — Overview, Operations, Detail, Onboarding & Observability for the metadata-driven Auto Loader framework"
       source_code_path: ./
+      # App runtime config (command + env) lives here in the bundle — NOT in a static
+      # app.yaml — so the deployed app's UC_CATALOG env is wired from ${var.uc_catalog}
+      # (the single source of truth). app.yaml was removed to avoid a second, divergent
+      # source for the catalog. Local dev reads env from .env, not from this block.
+      config:
+        command: ["npm", "run", "start"]
+        env:
+          - name: DATABRICKS_WAREHOUSE_ID
+            value_from: sql-warehouse
+          - name: LAKEBASE_ENDPOINT
+            value_from: postgres
+          # LAYER: Lakebase Postgres (NOT Unity Catalog). Isolated Console schema; keeps
+          # the Console off the live `metadata` schema on the shared Lakebase instance.
+          - name: METADATA_SCHEMA
+            value: metadata_console
+          # LAYER: Unity Catalog (Delta). Wired from the single source `var.uc_catalog`.
+          - name: UC_CATALOG
+            value: ${var.uc_catalog}
       # Uncomment to enable on behalf of user API scopes. Available scopes: sql, dashboards.genie, files.files, serving.serving-endpoints
       # user_api_scopes:
       #   - sql
