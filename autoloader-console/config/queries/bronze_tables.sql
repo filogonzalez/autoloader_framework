@@ -3,6 +3,6 @@ SELECT
   table_name,
   table_type,
   data_source_format
-FROM autoloader_demo.information_schema.tables
+FROM autoloader_console.information_schema.tables
 WHERE table_schema = 'bronze'
 ORDER BY table_name

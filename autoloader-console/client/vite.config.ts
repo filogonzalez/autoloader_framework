@@ -23,4 +23,12 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Bake the configured UC (Delta) catalog into the client bundle so the Onboarding
+  // wizard's new-source defaults and path hints point at the same catalog as the server.
+  // Build-time value from UC_CATALOG (default autoloader_console); the field stays editable.
+  define: {
+    'import.meta.env.VITE_UC_CATALOG': JSON.stringify(
+      process.env.UC_CATALOG ?? process.env.VITE_UC_CATALOG ?? 'autoloader_console',
+    ),
+  },
 });

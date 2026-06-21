@@ -10,5 +10,5 @@ SELECT
   CAST(0 AS DOUBLE)       AS success_rate,
   CAST(0 AS DOUBLE)       AS avg_duration_ms,
   CAST(0 AS BIGINT)       AS rows_written
-FROM autoloader_demo.metadata.ingestion_audit_log
+FROM autoloader_console.metadata.ingestion_audit_log
 WHERE 1 = 0

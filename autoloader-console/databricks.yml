@@ -5,6 +5,15 @@ variables:
   app_name:
     description: Deployed Databricks App name
     default: autoloader-console
+  uc_catalog:
+    description: >-
+      Unity Catalog (Delta) catalog for the framework's DATA layer that the Console
+      publishes into and reads Bronze/audit analytics from (`<catalog>.metadata.*`,
+      `<catalog>.bronze.*`, `<catalog>.information_schema.*`). Default `autoloader_console`.
+      NOTE: this is the UC catalog, a DIFFERENT layer from the Lakebase Postgres
+      `metadata_console` schema (env METADATA_SCHEMA). Threaded to the app runtime via the
+      `UC_CATALOG` env in app.yaml; set the matching env at client/query build time to retarget.
+    default: autoloader_console
   sql_warehouse_id:
     description: SQL Warehouse ID
   postgres_branch:

@@ -4,6 +4,15 @@
 bundle:
   name: autoloader_framework
 
+variables:
+  catalog:
+    description: >-
+      Unity Catalog catalog for the framework's data layer (metadata / bronze / landing
+      schemas + volumes). Change this single value to retarget the whole setup. On
+      Default-Storage workspaces the catalog should already exist (created out-of-band with
+      a managed location); the setup notebook skips CREATE CATALOG and is otherwise idempotent.
+    default: autoloader_console
+
 include:
   - resources/*.yml
 

@@ -9,6 +9,11 @@ resources:
   jobs:
     autoloader_framework_demo:
       name: "[${bundle.target}] Autoloader Framework Demo"
+      # Job-level parameter; propagated to every notebook task as the `catalog` widget so
+      # one variable (var.catalog, default autoloader_console) retargets setup + generate + run.
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
       tasks:
         - task_key: setup
           notebook_task:

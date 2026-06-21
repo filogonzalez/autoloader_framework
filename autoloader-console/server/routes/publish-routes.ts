@@ -7,13 +7,17 @@ import {
   type Literal,
 } from '../lib/rows';
 import { lakebaseQuery } from '../lib/retry';
-import { METADATA_SCHEMA } from '../lib/config';
+import { METADATA_SCHEMA, UC_CATALOG } from '../lib/config';
 import type { AppKit } from '../lib/types';
 
-// Read from the Console's own isolated Lakebase schema (default `metadata_console`),
-// never the live `metadata` schema. See server/lib/config.ts.
+// SOURCE of the publish: the Console's own isolated Lakebase (Postgres) schema
+// (default `metadata_console`), never the live `metadata` schema. See server/lib/config.ts.
 const META_SCHEMA = METADATA_SCHEMA;
-const DELTA_CATALOG = 'autoloader_demo';
+// TARGET of the publish: the Unity Catalog (Delta) catalog the framework reads
+// (env UC_CATALOG, default `autoloader_console`). The UC schema is the literal
+// `metadata` — consistent with src/sql/01_setup_metadata.sql and the analytics queries,
+// and intentionally independent of the Lakebase METADATA_SCHEMA above.
+const DELTA_CATALOG = UC_CATALOG;
 const DELTA_META = `${DELTA_CATALOG}.metadata`;
 const BRONZE_SCHEMA = 'bronze';
 
