@@ -21,11 +21,77 @@ FRAMEWORK_NOTEBOOK = "10_ingestion_framework"
 
 # COMMAND ----------
 
-operations = [
-    r["operation_id"]
-    for r in spark.table(f"{META}.operation").filter("enabled = true").orderBy("operation_id").collect()
-]
-print(f"Enabled operations: {operations}")
+# Dependency-aware ordering, driven entirely by metadata (no per-operation logic).
+#
+# Some operations consume what another operation produces: a Delta-table-as-source
+# (source_format='delta') reads FROM a Bronze table that is itself the target of
+# another enabled operation in the same pass. Running consumer-before-producer fails
+# with [TABLE_OR_VIEW_NOT_FOUND]. We discover those edges generically by matching a
+# delta source's table name to another op's target table, then topologically sort so
+# every producer runs before its consumer. Independent ops keep their operation_id
+# order for a stable, reproducible demo.
+ops_df = spark.table(f"{META}.operation").filter("enabled = true")
+obj = spark.table(f"{META}.object")
+
+# object_id -> (source_format, source_table_fq, target_fq). For a delta source the
+# fully-qualified source table is stored in file_path (same column build_reader uses);
+# for a target it is target_catalog.target_schema.target_table.
+src_rows = {
+    r["object_id"]: r.asDict()
+    for r in obj.filter("object_type = 'source'").collect()
+}
+tgt_rows = {
+    r["object_id"]: r.asDict()
+    for r in obj.filter("object_type = 'target'").collect()
+}
+
+
+def _target_fq(target_object_id):
+    t = tgt_rows.get(target_object_id)
+    if not t:
+        return None
+    return f"{t['target_catalog']}.{t['target_schema']}.{t['target_table']}"
+
+
+# Map each enabled op to the FQ table it produces, and the FQ table a delta source reads.
+op_meta = {}
+for r in ops_df.collect():
+    o = r.asDict()
+    s = src_rows.get(o["source_object_id"], {})
+    source_format = (s.get("source_format") or "cloudFiles")
+    reads_table = s.get("file_path") if source_format == "delta" else None
+    op_meta[o["operation_id"]] = {
+        "produces": _target_fq(o["target_object_id"]),
+        "reads_table": reads_table,
+    }
+
+# Index producers by the table they create, then build consumer -> producers edges.
+producers_by_table = {}
+for op_id, m in op_meta.items():
+    if m["produces"]:
+        producers_by_table.setdefault(m["produces"], []).append(op_id)
+
+deps = {op_id: set() for op_id in op_meta}
+for op_id, m in op_meta.items():
+    if m["reads_table"]:
+        for producer in producers_by_table.get(m["reads_table"], []):
+            if producer != op_id:  # ignore an op that streams its own target
+                deps[op_id].add(producer)
+
+# Deterministic topological sort: at each step run the ready op with the smallest id.
+operations, remaining = [], dict(deps)
+while remaining:
+    ready = sorted(op for op, d in remaining.items() if d <= set(operations))
+    if not ready:
+        # A cycle (or a dependency on a disabled op) — fall back to id order for the
+        # rest so the demo still runs every enabled operation.
+        ready = sorted(remaining)
+        print(f"WARNING: unresolved ordering for {ready}; falling back to id order.")
+    nxt = ready[0]
+    operations.append(nxt)
+    remaining.pop(nxt)
+
+print(f"Enabled operations (dependency-ordered): {operations}")
 
 # COMMAND ----------
 
