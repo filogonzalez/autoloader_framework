@@ -1,7 +1,7 @@
 -- =====================================================================================
 -- Metadata-Driven Autoloader Framework — Demo Seed
 -- -------------------------------------------------------------------------------------
--- Registers six realistic retail sources that exercise every capability of the
+-- Registers realistic retail sources that exercise every capability of the
 -- framework. Each is a metadata row — no per-source code exists anywhere.
 --
 -- INSERT OVERWRITE makes this script safely re-runnable (it fully replaces the rows).
@@ -70,6 +70,13 @@ VALUES
    NULL, NULL, NULL, NULL, NULL, NULL,
    'Vendor product catalog full snapshot (header CSV, schema inference, overwrite target)', current_timestamp()),
 
+  -- NEW SOURCE EXAMPLE: source object for store_locations (simple header CSV append feed)
+  ('src_store_locations', 'source', 'cloudFiles', NULL, NULL,
+   '/Volumes/autoloader_demo/landing/raw/store_locations/', '*.csv',
+   'csv', NULL, NULL, ',', 'UTF-8', '',
+   NULL, NULL, NULL, NULL, NULL, NULL,
+   'Store-location reference feed (header CSV, append-only onboarding example)', current_timestamp()),
+
   -- 8) POS transactions (Delta-table-as-source) — stream the Bronze POS table itself ─────
   --    Demonstrates streaming-TABLE ingestion (source_format='delta') via availableNow.
   --    file_path holds the FQ table name; storage_account/container/file_format are unused.
@@ -125,6 +132,12 @@ VALUES
    NULL, NULL, NULL, NULL, NULL, NULL,
    'autoloader_demo', 'bronze', 'product_catalog', NULL, NULL, NULL,
    'Bronze product catalog (fully replaced by each vendor snapshot)', current_timestamp()),
+
+  -- NEW SOURCE EXAMPLE: target object for store_locations (Bronze append table)
+  ('tgt_store_locations', 'target', NULL, NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, NULL, NULL, NULL,
+   'autoloader_demo', 'bronze', 'store_locations', NULL, NULL, NULL,
+   'Bronze store locations reference feed', current_timestamp()),
 
   -- Target for the Delta-table-as-source stream (new Bronze table, append load) ──────────
   ('tgt_pos_stream_replica', 'target', NULL, NULL, NULL, NULL, NULL,
@@ -183,6 +196,11 @@ VALUES
   ('op_product_catalog', TRUE, 'src_product_catalog', 'tgt_product_catalog',
    'overwrite', TRUE, 'addNewColumns', FALSE, FALSE, FALSE, 1000, NULL,
    'Full-snapshot product catalog load; overwrite fully replaces Bronze each run', current_timestamp()),
+
+  -- NEW SOURCE EXAMPLE: operation binding for store_locations (append CSV into Bronze)
+  ('op_store_locations', TRUE, 'src_store_locations', 'tgt_store_locations',
+   'append', TRUE, 'addNewColumns', TRUE, FALSE, FALSE, 1000, NULL,
+   'Append store-location header CSV; simple metadata-only onboarding example', current_timestamp()),
 
   -- Delta-table-as-source: stream the Bronze POS table into a new Bronze replica (append).
   -- source_format='delta' => no cloudFiles options; trigger(availableNow=True) preserves the
