@@ -280,6 +280,9 @@ function DetailPanel({
 
   useEffect(() => {
     if (!bundle || !exists || !table) {
+      // Intentional reset-on-dependency-change: clear stale physical specs when the
+      // selected table becomes invalid/changes. Guarded by deps, so no render loop.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDetail(null);
       return;
     }

@@ -96,7 +96,7 @@ export function SourcesPage() {
           <Button onClick={openAdd}>
             <Plus className="h-4 w-4 mr-1" /> Add data source
           </Button>
-          <Button variant="secondary" onClick={doPublish} disabled={publishing}>
+          <Button variant="secondary" onClick={() => void doPublish()} disabled={publishing}>
             <UploadCloud className="h-4 w-4 mr-1" />
             {publishing ? 'Publishing…' : 'Publish to framework'}
           </Button>
@@ -141,7 +141,7 @@ export function SourcesPage() {
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={b.operation.enabled}
-                      onCheckedChange={(v) => toggle(b, v)}
+                      onCheckedChange={(v) => void toggle(b, v)}
                       aria-label="Enable operation"
                     />
                     <span className="text-xs text-muted-foreground">

@@ -1,6 +1,6 @@
 # autoloader-console
 
-The **Autoloader Console** — a Databricks App powered by [AppKit](https://www.databricks.com/devhub/docs/appkit/v0/) (React, TypeScript, Tailwind CSS) that surfaces five views over the metadata-driven Auto Loader framework: **Overview, Operations, Detail, Onboarding, Observability**, with an ES/EN language toggle and Scotiabank LATAM branding.
+The **Autoloader Console** — a Databricks App powered by [AppKit](https://www.databricks.com/devhub/docs/appkit/v0/) (React, TypeScript, Tailwind CSS) over the metadata-driven Auto Loader framework, with an ES/EN language toggle and Scotiabank LATAM branding. Views: **Overview**, **Sources** (CRUD + publish-to-Delta), **Lineage** (tables & lineage graph), **Detail**, **Onboarding** (guided source wizard), **Observability**. Sources, Lineage, and Onboarding are fully built; Overview and Observability remain Phase-0 stubs.
 
 It shares the `autoloader-meta` Lakebase instance with the live `autoloader-sources` app but uses its own isolated `metadata_console` schema (via the `METADATA_SCHEMA` env var) and deploys as a separate app named via the `app_name` DABs variable. This is the **Phase 0** shell: working routes + stubs with clean extension points (`TODO(run-now)`, `TODO(lineage-tiers)`, `TODO(observability)`); full view content lands in later phases. See `docs/autoloader-console/ROADMAP-stubbed-features.md`.
 
@@ -8,6 +8,26 @@ It shares the `autoloader-meta` Lakebase instance with the live `autoloader-sour
 - **Analytics** -- SQL query execution against Databricks SQL Warehouses
 - **Lakebase** -- Fully managed Postgres database for transactional (OLTP) workloads on Databricks
 - **Server** -- Express HTTP server with static file serving and Vite dev mode
+
+## Identity & on-behalf-of-user (OBO) auth
+
+The Console shows the **real signed-in user** and runs Unity Catalog work **as that user**, not as the app service principal (SP).
+
+**Who is signed in.** `GET /api/me` (`server/routes/identity-routes.ts`) derives `{ email, username, displayName }` from the Databricks Apps identity headers injected on every request — `x-forwarded-email`, `x-forwarded-preferred-username`, `x-forwarded-user` — with a local-dev fallback (OS/CLI user) when no Apps proxy is in front. The client `useCurrentUser` hook (`client/src/identity/`) fetches it and renders it in the sidebar.
+
+**OBO policy** (`user_api_scopes: [sql]` in `databricks.yml`):
+
+| Path | Runs as | How |
+| ---- | ------- | --- |
+| UC analytics **reads** (Lineage page: bronze tables/columns, audit) | **User (OBO)** | Query files renamed `config/queries/*.obo.sql` — AppKit's analytics plugin executes `*.obo.sql` with the user's credentials (the query key is unchanged, so the client is untouched). |
+| **Publish-to-Delta** + `DESCRIBE DETAIL` (`server/routes/publish-routes.ts`) | **User (OBO)** | A **per-request** `WorkspaceClient({ host, token })` is built from `x-forwarded-access-token` — never the process-cached SP client. |
+| Lakebase `metadata_console` **writes** (`server/routes/metadata-routes.ts`) | **Service principal** | The console owns its own Postgres schema, so CRUD stays on the default `appkit.lakebase` pool. |
+
+So UC grants/audit reflect the actual person, while the console keeps full ownership of its own metadata schema.
+
+**No user token?** The publish/describe routes **fail with a clear 401** rather than silently using the SP (which would hide the acting identity). The sole exception is local `npm run dev` (no Apps proxy injects the header): there the publish path falls back to the default auth chain and **warns loudly** that it is running as the SP — it never silently masquerades.
+
+**Why not `appkit.analytics.asUser(req)` for publish?** The analytics plugin only runs file-based queries (it can't carry the dynamic `INSERT OVERWRITE` statements) and caches results — which would defeat the post-publish read-back `COUNT` assertion. The hand-rolled per-request client keeps that safeguard intact and makes the acting identity explicit. Native filename OBO (`*.obo.sql`) is used for the read-only analytics queries.
 
 ## Prerequisites
 

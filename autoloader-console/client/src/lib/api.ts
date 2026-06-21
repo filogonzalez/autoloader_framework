@@ -77,7 +77,7 @@ export interface ApiError {
 
 async function asJson<T>(res: Response): Promise<T> {
   const text = await res.text();
-  const body = text ? JSON.parse(text) : null;
+  const body: unknown = text ? JSON.parse(text) : null;
   if (!res.ok) {
     const err = (body as ApiError) ?? { error: res.statusText };
     const e = new Error(err.error || `Request failed: ${res.status}`);
@@ -89,6 +89,17 @@ async function asJson<T>(res: Response): Promise<T> {
 
 export async function fetchReference(): Promise<Reference> {
   return asJson<Reference>(await fetch('/api/reference'));
+}
+
+/** The real signed-in user, from the Databricks Apps identity headers (GET /api/me). */
+export interface CurrentUser {
+  email: string | null;
+  username: string;
+  displayName: string;
+}
+
+export async function fetchCurrentUser(): Promise<CurrentUser> {
+  return asJson<CurrentUser>(await fetch('/api/me'));
 }
 
 export async function fetchSources(): Promise<SourceBundle[]> {

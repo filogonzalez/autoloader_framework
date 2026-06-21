@@ -1,5 +1,6 @@
 import { WorkspaceClient } from '@databricks/sdk-experimental';
 import type { sql as sqlApi } from '@databricks/sdk-experimental';
+import type { Request } from 'express';
 import {
   OBJECT_COLS,
   OPERATION_COLS,
@@ -21,14 +22,64 @@ const DELTA_CATALOG = UC_CATALOG;
 const DELTA_META = `${DELTA_CATALOG}.metadata`;
 const BRONZE_SCHEMA = 'bronze';
 
-let cachedClient: WorkspaceClient | null = null;
-function workspaceClient(): WorkspaceClient {
-  if (!cachedClient) {
-    // Default auth resolution: in a deployed app the platform injects
-    // DATABRICKS_HOST / DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET.
-    cachedClient = new WorkspaceClient({});
+/**
+ * OBO POLICY (on-behalf-of-user) — applies to this whole module:
+ *
+ *   • UC reads + the publish-to-Delta path run AS THE USER. Every Databricks SQL
+ *     statement here (INSERT OVERWRITE / TRUNCATE on the Delta metadata tables,
+ *     DESCRIBE DETAIL, the read-back COUNT(*)) executes through a WorkspaceClient
+ *     built from the requesting user's access token, so Unity Catalog grants and
+ *     audit reflect the actual person — not the app service principal.
+ *   • Lakebase `metadata_console` writes stay SP-owned (see metadata-routes.ts):
+ *     the console owns its own Postgres schema, so those keep going through the
+ *     default `appkit.lakebase` pool, NOT this client.
+ *
+ * Why a hand-rolled per-request WorkspaceClient (not appkit.analytics.asUser(req))?
+ * The analytics plugin only runs file-based queries (config/queries/*.sql) — it
+ * cannot carry these dynamic INSERT OVERWRITE statements — and it caches results,
+ * which would defeat the post-publish read-back COUNT assertion below. Reading the
+ * user token per request keeps that careful publish logic intact and makes the
+ * acting identity explicit. The native filename OBO (`*.obo.sql`) is used instead
+ * for the read-only analytics queries the Lineage page consumes.
+ */
+class MissingUserTokenError extends Error {
+  constructor() {
+    super(
+      'No user access token (x-forwarded-access-token) on the request. This action ' +
+        'runs on your behalf (OBO); ensure the app has user_api_scopes [sql] enabled ' +
+        'and that you are signed in.',
+    );
+    this.name = 'MissingUserTokenError';
   }
-  return cachedClient;
+}
+
+/**
+ * Build a WorkspaceClient scoped to the requesting USER from the Apps OBO header
+ * (`x-forwarded-access-token`). Never cached — the token is per-user, per-request.
+ *
+ * If the token is absent we FAIL with a clear error rather than silently falling
+ * back to the app SP (which would hide the acting identity). The one exception is
+ * local `npm run dev`, where no Apps proxy injects the header: there we fall back
+ * to the default auth chain and WARN loudly that the run is the SP, not a user
+ * (mirrors AppKit's own documented OBO dev fallback).
+ */
+function userWorkspaceClient(req: Request): WorkspaceClient {
+  // Trim so a blank / whitespace-only header is treated as ABSENT (→ clear 401),
+  // not as a present-but-invalid token that would only fail later as a 500.
+  const token = req.header('x-forwarded-access-token')?.trim();
+  const host = process.env.DATABRICKS_HOST;
+  if (token) {
+    if (!host) throw new Error('DATABRICKS_HOST is not set');
+    return new WorkspaceClient({ host, token });
+  }
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(
+      '[publish] OBO dev fallback: no x-forwarded-access-token — running as the app ' +
+        'service principal, NOT a user. UC grants/audit will reflect the SP.',
+    );
+    return new WorkspaceClient({});
+  }
+  throw new MissingUserTokenError();
 }
 
 function warehouseId(): string {
@@ -42,9 +93,8 @@ interface SqlResult {
   rows: string[][];
 }
 
-/** Execute a Databricks SQL statement, waiting (and polling) until terminal. */
-async function executeSql(statement: string): Promise<SqlResult> {
-  const client = workspaceClient();
+/** Execute a Databricks SQL statement (as the given user-scoped client), polling until terminal. */
+async function executeSql(client: WorkspaceClient, statement: string): Promise<SqlResult> {
   const wh = warehouseId();
   let resp = await client.statementExecution.executeStatement({
     statement,
@@ -71,7 +121,7 @@ async function executeSql(statement: string): Promise<SqlResult> {
   const columns = (resp.manifest?.schema?.columns ?? []).map(
     (c: sqlApi.ColumnInfo) => c.name ?? '',
   );
-  const rows = (resp.result?.data_array ?? []) as string[][];
+  const rows = resp.result?.data_array ?? [];
   return { columns, rows };
 }
 
@@ -94,8 +144,8 @@ function buildOverwrite(
 }
 
 /** Read back the row count of a Delta table (post-publish assertion). */
-async function tableCount(table: string): Promise<number> {
-  const { rows } = await executeSql(`SELECT COUNT(*) FROM ${table}`);
+async function tableCount(client: WorkspaceClient, table: string): Promise<number> {
+  const { rows } = await executeSql(client, `SELECT COUNT(*) FROM ${table}`);
   const raw = rows[0]?.[0];
   const n = Number(raw);
   if (!Number.isFinite(n)) {
@@ -126,8 +176,10 @@ function operationRowFromDb(r: Record<string, unknown>): Literal[] {
 export function registerPublishRoutes(appkit: AppKit): void {
   appkit.server.extend((app) => {
     // Publish all Lakebase metadata into the Delta tables the framework reads.
-    app.post('/api/publish', async (_req, res) => {
+    app.post('/api/publish', async (req, res) => {
       try {
+        // Delta writes/reads below run AS THE USER (OBO). Lakebase reads stay SP.
+        const client = userWorkspaceClient(req);
         const objects = await lakebaseQuery(
           appkit,
           `SELECT ${OBJECT_COLS.join(', ')} FROM ${META_SCHEMA}.object ORDER BY object_id`,
@@ -152,12 +204,12 @@ export function registerPublishRoutes(appkit: AppKit): void {
         // does NOT surface: a statement that "succeeds" but lands a different row count than we
         // published — e.g. the empty-input TRUNCATE path (table cleared to 0) or a silent
         // column/DDL misalignment that dropped rows.
-        await executeSql(buildOverwrite(objectTable, OBJECT_COLS, objectRows));
-        await executeSql(buildOverwrite(operationTable, OPERATION_COLS, operationRows));
+        await executeSql(client, buildOverwrite(objectTable, OBJECT_COLS, objectRows));
+        await executeSql(client, buildOverwrite(operationTable, OPERATION_COLS, operationRows));
 
         const [objectCount, operationCount] = await Promise.all([
-          tableCount(objectTable),
-          tableCount(operationTable),
+          tableCount(client, objectTable),
+          tableCount(client, operationTable),
         ]);
 
         if (objectCount !== objectRows.length || operationCount !== operationRows.length) {
@@ -175,6 +227,10 @@ export function registerPublishRoutes(appkit: AppKit): void {
           target: DELTA_META,
         });
       } catch (err) {
+        if (err instanceof MissingUserTokenError) {
+          res.status(401).json({ error: err.message });
+          return;
+        }
         console.error('Publish failed:', err);
         res.status(500).json({ error: `Publish failed: ${(err as Error).message}` });
       }
@@ -188,7 +244,9 @@ export function registerPublishRoutes(appkit: AppKit): void {
         return;
       }
       try {
+        const client = userWorkspaceClient(req);
         const { columns, rows } = await executeSql(
+          client,
           `DESCRIBE DETAIL ${DELTA_CATALOG}.${BRONZE_SCHEMA}.${table}`,
         );
         if (rows.length === 0) {
@@ -201,6 +259,10 @@ export function registerPublishRoutes(appkit: AppKit): void {
         });
         res.json(detail);
       } catch (err) {
+        if (err instanceof MissingUserTokenError) {
+          res.status(401).json({ error: err.message });
+          return;
+        }
         const message = (err as Error).message;
         // Table not yet created (operation published but job not run) → 404 sentinel.
         if (/TABLE_OR_VIEW_NOT_FOUND|does not exist|cannot be found/i.test(message)) {

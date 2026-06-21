@@ -15,13 +15,13 @@ const en = {
   'brand.subtitle': 'DATA · LATAM',
   'nav.section': 'PLATFORM',
   'nav.overview': 'Overview',
-  'nav.operations': 'Operations',
+  'nav.sources': 'Sources',
+  'nav.lineage': 'Lineage',
   'nav.detail': 'Detail',
   'nav.onboarding': 'Onboarding',
   'nav.observability': 'Observability',
   'nav.open': 'Open navigation',
-  'user.name': 'Diego Morales',
-  'user.role': 'Data Engineering',
+  'user.unknown': 'Unknown user',
 
   // Top bar / chrome
   'chrome.breadcrumbRoot': 'scotia_latam',
@@ -36,9 +36,12 @@ const en = {
   'overview.title': 'Overview',
   'overview.subtitle': 'Ingestion overview',
 
-  // Operations
-  'operations.title': 'Operations',
-  'operations.subtitle': 'Ingestion operations',
+  // Sources (real CRUD + publish page)
+  'sources.title': 'Ingestion sources',
+  'sources.subtitle': 'Manage & publish operations',
+
+  // Lineage (real tables & lineage graph)
+  'lineage.subtitle': 'Tables & lineage',
 
   // Detail
   'detail.title': 'Operation detail',
@@ -73,13 +76,13 @@ const es: Record<TranslationKey, string> = {
   'brand.subtitle': 'DATA · LATAM',
   'nav.section': 'PLATAFORMA',
   'nav.overview': 'Resumen',
-  'nav.operations': 'Operaciones',
+  'nav.sources': 'Fuentes',
+  'nav.lineage': 'Linaje',
   'nav.detail': 'Detalle',
   'nav.onboarding': 'Onboarding',
   'nav.observability': 'Observabilidad',
   'nav.open': 'Abrir navegación',
-  'user.name': 'Diego Morales',
-  'user.role': 'Data Engineering',
+  'user.unknown': 'Usuario desconocido',
 
   // Top bar / chrome
   'chrome.breadcrumbRoot': 'scotia_latam',
@@ -94,9 +97,12 @@ const es: Record<TranslationKey, string> = {
   'overview.title': 'Resumen',
   'overview.subtitle': 'Resumen de ingesta',
 
-  // Operations
-  'operations.title': 'Operaciones',
-  'operations.subtitle': 'Operaciones de ingesta',
+  // Sources (real CRUD + publish page)
+  'sources.title': 'Fuentes de ingesta',
+  'sources.subtitle': 'Gestionar y publicar operaciones',
+
+  // Lineage (real tables & lineage graph)
+  'lineage.subtitle': 'Tablas y linaje',
 
   // Detail
   'detail.title': 'Detalle de operación',

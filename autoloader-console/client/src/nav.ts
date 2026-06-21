@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Database,
+  Network,
   FileSearch,
   PlusCircle,
   Activity,
@@ -17,8 +18,10 @@ export interface NavView {
   icon: LucideIcon;
 }
 
-// The five Phase 0 views. Detail is a sidebar entry here; in a later phase it also
-// becomes an operation drill-down (e.g. /operations/:id) per the design.
+// Console views. Sources (CRUD + publish) and Lineage (tables & lineage graph) are
+// the fully-built views; Overview and Observability remain Phase-0 stubs (their real
+// content lands in a later phase — see docs/autoloader-console/ROADMAP-stubbed-features.md).
+// Detail hosts the run-now + lineage-tier seams.
 export const NAV_VIEWS: NavView[] = [
   {
     path: '/',
@@ -28,11 +31,18 @@ export const NAV_VIEWS: NavView[] = [
     icon: LayoutDashboard,
   },
   {
-    path: '/operations',
-    navKey: 'nav.operations',
-    titleKey: 'operations.title',
-    subtitleKey: 'operations.subtitle',
+    path: '/sources',
+    navKey: 'nav.sources',
+    titleKey: 'sources.title',
+    subtitleKey: 'sources.subtitle',
     icon: Database,
+  },
+  {
+    path: '/lineage',
+    navKey: 'nav.lineage',
+    titleKey: 'lineage.title',
+    subtitleKey: 'lineage.subtitle',
+    icon: Network,
   },
   {
     path: '/detail',
